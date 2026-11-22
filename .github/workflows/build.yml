@@ -1,6 +1,10 @@
 # Builds ONE self-contained Windows executable (LimbusFight.exe) on every push to main.
-# raylib.dll and the .NET 8 runtime are packed inside the exe, so players download a single
-# file from the run's "Artifacts" section: no zip, no DLLs, no .NET install required.
+# raylib.dll and the .NET 8 runtime are packed inside the exe: no zip, no DLLs, no .NET install.
+#
+# The exe is published to a rolling GitHub pre-release called "latest-build", replaced on every
+# push. Release files do NOT use the account's 500 MB Actions artifact storage, so builds can
+# never fail with "Artifact storage quota has been hit". Permanent download link:
+#   https://github.com/<owner>/<repo>/releases/download/latest-build/LimbusFight.exe
 
 name: Build LimbusFight.exe
 
@@ -10,7 +14,7 @@ on:
   workflow_dispatch: # also allows a manual "Run workflow" button in the Actions tab
 
 permissions:
-  contents: read
+  contents: write # needed to create / replace the "latest-build" release
 
 concurrency:
   group: build-${{ github.ref }}
@@ -67,10 +71,39 @@ jobs:
           ./publish/LimbusFight.exe --selftest
           if ($LASTEXITCODE -ne 0) { throw "Self-test failed with exit code $LASTEXITCODE" }
 
-      - name: Upload LimbusFight.exe (unzipped)
-        uses: actions/upload-artifact@v7
-        with:
-          path: publish/LimbusFight.exe
-          archive: false # single file, downloads as LimbusFight.exe instead of a .zip
-          if-no-files-found: error
-          retention-days: 30
+      - name: Publish LimbusFight.exe to the "latest-build" pre-release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: latest-build
+        run: |
+          $sha = "${{ github.sha }}"
+          $version = "0.1.${{ github.run_number }}"
+          $notesFile = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          @(
+            "Automatic build v$version from commit $($sha.Substring(0, 7)).",
+            '',
+            'Download **LimbusFight.exe** below and run it. It is an unsigned debug build, so Windows SmartScreen may warn: click *More info* > *Run anyway*.',
+            '',
+            'This release is replaced on every push to main.'
+          ) | Set-Content -Path $notesFile -Encoding utf8
+
+          # Replace the previous build: delete the old release and its tag (if any), then recreate both on this commit.
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete $env:TAG --cleanup-tag --yes
+            if ($LASTEXITCODE -ne 0) { throw "Could not delete the old '$env:TAG' release." }
+          }
+
+          gh release create $env:TAG publish/LimbusFight.exe `
+            --target $sha `
+            --prerelease `
+            --title "Latest build (v$version)" `
+            --notes-file $notesFile
+          if ($LASTEXITCODE -ne 0) { throw "Could not create the '$env:TAG' release." }
+
+          $url = "https://github.com/$env:GH_REPO/releases/download/$env:TAG/LimbusFight.exe"
+          "Download: $url"
+          "### LimbusFight.exe v$version`n`n[Download LimbusFight.exe]($url)" >> $env:GITHUB_STEP_SUMMARY

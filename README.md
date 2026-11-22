@@ -41,8 +41,12 @@ LimbusFight/
 
 ## Download the exe
 
-GitHub > **Actions** > latest **Build LimbusFight.exe** run > **Artifacts** > `LimbusFight.exe`
-(you must be signed in to GitHub to download artifacts).
+Every push to `main` replaces the **Latest build** pre-release:
+
+https://github.com/cng605568-art/limbus-fight/releases/download/latest-build/LimbusFight.exe
+
+(also under **Releases** on the repo page). Builds go to a release rather than Actions
+artifacts so they never use the account's 500 MB artifact storage quota.
 
 ## Controls (Step 1)
 
