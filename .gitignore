@@ -1,0 +1,22 @@
+# Build output
+bin/
+obj/
+publish/
+artifacts/
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# Runtime output
+LimbusFight_crash.log
+screenshot*.png
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store

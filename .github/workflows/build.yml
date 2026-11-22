@@ -1,0 +1,76 @@
+# Builds ONE self-contained Windows executable (LimbusFight.exe) on every push to main.
+# raylib.dll and the .NET 8 runtime are packed inside the exe, so players download a single
+# file from the run's "Artifacts" section: no zip, no DLLs, no .NET install required.
+
+name: Build LimbusFight.exe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also allows a manual "Run workflow" button in the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  PROJECT: src/LimbusFight/LimbusFight.csproj
+
+jobs:
+  build-win-x64:
+    name: Build win-x64 single-file exe
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish self-contained single-file exe
+        shell: pwsh
+        run: >
+          dotnet publish $env:PROJECT
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output publish
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=embedded
+          -p:Version=0.1.${{ github.run_number }}
+          -p:SourceRevisionId=${{ github.sha }}
+
+      - name: Verify output is exactly one exe
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem publish -File
+          $files | Format-Table Name, @{ Label = 'Size (MB)'; Expression = { '{0:N1}' -f ($_.Length / 1MB) } } -AutoSize
+          if (-not (Test-Path publish/LimbusFight.exe)) { throw 'publish/LimbusFight.exe was not produced.' }
+          $leaked = $files | Where-Object { $_.Extension -in '.dll', '.so', '.dylib' }
+          if ($leaked) { throw "Libraries leaked next to the exe (should be bundled inside): $($leaked.Name -join ', ')" }
+
+      - name: Smoke test (starts exe, unpacks + loads raylib.dll, scans Steam)
+        shell: pwsh
+        run: |
+          ./publish/LimbusFight.exe --selftest
+          if ($LASTEXITCODE -ne 0) { throw "Self-test failed with exit code $LASTEXITCODE" }
+
+      - name: Upload LimbusFight.exe (unzipped)
+        uses: actions/upload-artifact@v7
+        with:
+          path: publish/LimbusFight.exe
+          archive: false # single file, downloads as LimbusFight.exe instead of a .zip
+          if-no-files-found: error
+          retention-days: 30
