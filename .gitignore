@@ -14,6 +14,7 @@ artifacts/
 
 # Runtime output
 LimbusFight_crash.log
+LimbusFight_asset_report.txt
 screenshot*.png
 
 # OS junk

@@ -65,8 +65,35 @@ public static class SelfTest
         bool raylibOk = ProbeRaylib();
         Console.WriteLine();
 
-        Console.WriteLine(raylibOk ? "SELFTEST PASSED" : "SELFTEST FAILED");
-        return raylibOk ? 0 : 1;
+        Console.WriteLine("[Assets] bundle reader + texture decoder probe");
+        bool assetsOk = ProbeAssetLibraries();
+        Console.WriteLine();
+
+        bool passed = raylibOk && assetsOk;
+        Console.WriteLine(passed ? "SELFTEST PASSED" : "SELFTEST FAILED");
+        return passed ? 0 : 1;
+    }
+
+    /// <summary>Proves AssetsTools.NET and the texture decoders made it into the single-file exe.</summary>
+    private static bool ProbeAssetLibraries()
+    {
+        try
+        {
+            _ = new AssetsTools.NET.Extra.AssetsManager();
+            Console.WriteLine("  AssetsTools.NET     : ok");
+
+            // One 4x4 DXT1 block, both colours pure red (RGB565 0xF800).
+            byte[] block = { 0x00, 0xF8, 0x00, 0xF8, 0, 0, 0, 0 };
+            bool decoded = LimbusFight.Assets.TextureDecoding.TryDecode(10, block, 4, 4, out byte[] rgba, out string error);
+            bool red = decoded && rgba[0] == 255 && rgba[1] == 0 && rgba[2] == 0 && rgba[3] == 255;
+            Console.WriteLine($"  DXT1 test decode    : {(red ? "ok" : "FAILED " + error)}");
+            return red;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  FAILED: {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
     }
 
     private static bool ProbeRaylib()

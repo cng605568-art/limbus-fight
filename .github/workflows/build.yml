@@ -65,11 +65,20 @@ jobs:
           $leaked = $files | Where-Object { $_.Extension -in '.dll', '.so', '.dylib' }
           if ($leaked) { throw "Libraries leaked next to the exe (should be bundled inside): $($leaked.Name -join ', ')" }
 
-      - name: Smoke test (starts exe, unpacks + loads raylib.dll, scans Steam)
+      - name: Smoke test (starts exe, unpacks + loads raylib.dll, asset libraries, scans Steam)
         shell: pwsh
         run: |
           ./publish/LimbusFight.exe --selftest
           if ($LASTEXITCODE -ne 0) { throw "Self-test failed with exit code $LASTEXITCODE" }
+
+      - name: Smoke test (asset scan runs; no Limbus Company on the runner, so it finds nothing)
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          Copy-Item "$env:GITHUB_WORKSPACE/publish/LimbusFight.exe" .
+          ./LimbusFight.exe --scan-assets
+          if ($LASTEXITCODE -ne 0) { throw "Asset scan failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path ./LimbusFight_asset_report.txt)) { throw 'Asset report was not written.' }
 
       - name: Publish LimbusFight.exe to the "latest-build" pre-release
         if: github.ref == 'refs/heads/main'

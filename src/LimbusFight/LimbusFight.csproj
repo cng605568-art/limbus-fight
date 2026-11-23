@@ -23,6 +23,9 @@
 
     <!-- Embedded PDB = line numbers in LimbusFight_crash.log without a separate .pdb file. -->
     <DebugType>embedded</DebugType>
+
+    <!-- Needed to hand decoded pixels to Raylib without copying (AssetBrowserScreen). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!--
@@ -41,6 +44,10 @@
   <ItemGroup>
     <!-- Raylib-cs 8.1.0 = official raylib 6.0 natives for win-x64 / linux-x64 / osx. -->
     <PackageReference Include="Raylib-cs" Version="8.1.0" />
+
+    <!-- Step 2: read Unity bundles (MIT) and decode their textures (MIT). Both are pure managed code. -->
+    <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
+    <PackageReference Include="AssetRipper.TextureDecoder" Version="2.6.3" />
   </ItemGroup>
 
 </Project>
