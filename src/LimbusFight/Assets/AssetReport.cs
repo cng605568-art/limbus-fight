@@ -86,6 +86,11 @@ public static class AssetReport
 
         AppendDeepSample(sb, scan, reader, progress, cancel);
 
+        if (cache is not null)
+        {
+            AppendSpriteSample(sb, scan, reader, cache, progress, cancel);
+        }
+
         Section(sb, "All browsable files (name, size)");
         foreach (ScannedFile file in scan.Browsable.OrderBy(f => f.RootKind).ThenBy(f => f.DisplayName, StringComparer.OrdinalIgnoreCase).Take(20000))
         {
@@ -122,6 +127,56 @@ public static class AssetReport
         }
 
         throw new IOException("Could not write the asset report anywhere.");
+    }
+
+    /// <summary>
+    /// How sprites are stored (atlas, packing, mesh) in a few sprite-heavy bundles, so sprite cutting
+    /// can be checked against the real files. Names and numbers only.
+    /// </summary>
+    private static void AppendSpriteSample(StringBuilder sb, AssetScanResult scan, UnityAssetReader reader, AssetCache cache, IProgress<string>? progress, CancellationToken cancel)
+    {
+        List<(ScannedFile File, int Sprites, bool Atlas)> candidates = scan.Browsable
+            .Select(f => (File: f, Names: cache.GetNames(f.FullPath) ?? Array.Empty<AssetName>()))
+            .Select(x => (x.File,
+                Sprites: x.Names.Count(n => n.Kind == NameKind.Sprite),
+                Atlas: x.Names.Any(n => n.Kind == NameKind.Texture && n.Name.StartsWith("sactx", StringComparison.OrdinalIgnoreCase))))
+            .Where(x => x.Sprites > 0)
+            .ToList();
+
+        Section(sb, $"Sprite sample ({candidates.Count} files contain sprites)");
+        if (candidates.Count == 0)
+        {
+            sb.AppendLine("    (no sprites indexed yet - open the F3 browser and wait for \"Search ready\")");
+            return;
+        }
+
+        // A spread of atlas bundles (largest first) plus a couple of non-atlas sprite files.
+        List<ScannedFile> picks = candidates.Where(c => c.Atlas).OrderByDescending(c => c.Sprites).Take(6)
+            .Concat(candidates.Where(c => !c.Atlas).OrderByDescending(c => c.Sprites).Take(2))
+            .Select(c => c.File)
+            .ToList();
+
+        int done = 0;
+        foreach (ScannedFile file in picks)
+        {
+            if (cancel.IsCancellationRequested)
+            {
+                break;
+            }
+
+            progress?.Report($"Writing report: sprite sample {++done} / {picks.Count}...");
+            int total = candidates.First(c => c.File == file).Sprites;
+            sb.AppendLine($"  {file.DisplayName}  ({total} sprite{(total == 1 ? string.Empty : "s")})");
+
+            IReadOnlyList<SpriteDiagnostics> sprites = reader.DescribeSprites(file, 12);
+            foreach (SpriteDiagnostics s in sprites)
+            {
+                sb.AppendLine($"      {s.Name,-40} {s.RectWidth,5:0}x{s.RectHeight,-5:0} {s.Packing,-22} v{s.VertexCount,-4} t{s.TriangleCount,-4} uv:{(s.HasUvs ? "yes" : "no "),-4} {s.Source}");
+                sb.AppendLine($"          mesh: {s.Channels}" + (s.Problem is null ? string.Empty : "   PROBLEM: " + s.Problem));
+            }
+        }
+
+        reader.Close();
     }
 
     private static void AppendDeepSample(StringBuilder sb, AssetScanResult scan, UnityAssetReader reader, IProgress<string>? progress, CancellationToken cancel)

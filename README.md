@@ -21,6 +21,10 @@ two test fighters, F1 hitbox / FPS overlay and the red update screen.
 - **F3 asset browser:** lists every Unity bundle, opens it, previews any texture inside
   (DXT/BC, ETC, ASTC, Crunch and raw formats) and saves it as PNG to
   `%LOCALAPPDATA%\LimbusFight\exports` on request (Ctrl+S).
+- **Sprites:** bundles that hold sprite atlases (`sactx-…` sheets) list every sprite on them.
+  Picking one cuts it out of its sheet: it follows the SpriteAtlas entry, undoes packing
+  rotation/flips, and draws the sprite's own mesh (or masks it with the mesh outline for tight
+  packing). The preview marks the sprite's pivot, which is where the game will stand it.
 - **Search by name:** Limbus Company's bundles have hash names, so the first run reads the names
   of every texture, sprite and sound inside them. Typing in the browser then finds bundles by
   those names. Names and file headers are remembered in `%LOCALAPPDATA%\LimbusFight\cache`, so
@@ -51,7 +55,8 @@ LimbusFight/
     │   ├── AssetScanner.cs          inventory by file header (bundle, audio bank, video...)
     │   ├── AssetCache.cs            remembers headers + names between runs
     │   ├── AssetIndexer.cs          reads texture / sprite / sound names for search
-    │   ├── UnityAssetReader.cs      opens bundles, lists objects, reads textures (AssetsTools.NET)
+    │   ├── UnityAssetReader.cs      opens bundles, lists textures + sprites, follows atlases (AssetsTools.NET)
+    │   ├── SpriteCutter.cs          cuts one sprite out of its sheet (mesh UVs, rotation, tight mask)
     │   ├── TextureDecoding.cs       Unity texture formats -> RGBA
     │   ├── AssetReport.cs           LimbusFight_asset_report.txt
     │   └── AssetScanCli.cs          --scan-assets
@@ -81,7 +86,7 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | J | punch |
 | R | reset positions |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
-| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save PNG, Ctrl+O open exports, Ctrl+R report) |
+| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+O open exports, Ctrl+R report) |
 | F5 | re-scan Steam (and the asset folders when the browser is open) |
 | ESC | quit |
 

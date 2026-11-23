@@ -35,7 +35,17 @@ public sealed class AssetBrowserScreen : IDisposable
     private enum Pane
     {
         Files,
-        Textures,
+        Pictures,
+    }
+
+    /// <summary>One row of the middle list: a sprite (single picture) or a texture (whole sheet).</summary>
+    private sealed record PictureEntry(SpriteInfo? Sprite, TextureInfo? Texture)
+    {
+        public string Name => Sprite?.Name ?? Texture?.Name ?? string.Empty;
+
+        public int Width => Sprite?.Width ?? Texture?.Width ?? 0;
+
+        public int Height => Sprite?.Height ?? Texture?.Height ?? 0;
     }
 
     private readonly UnityAssetReader _reader = new();
@@ -69,14 +79,15 @@ public sealed class AssetBrowserScreen : IDisposable
     private ScannedFile? _contentsSource;
     private ScannedFile? _wantedSource;
     private AssetFileContents? _contents;
-    private List<TextureInfo> _textureView = new();
+    private List<PictureEntry> _pictures = new();
+    private List<PictureEntry> _textureView = new();
     private int _texIndex;
     private int _texScroll;
 
     // ---- Preview ----------------------------------------------------------------------------
     private Task<DecodedImage>? _decodeTask;
-    private TextureInfo? _decodeFor;
-    private TextureInfo? _wantedTexture;
+    private PictureEntry? _decodeFor;
+    private PictureEntry? _wantedTexture;
     private DecodedImage? _image;
     private Texture2D? _gpuTexture;
     private string? _previewError;
@@ -272,8 +283,11 @@ public sealed class AssetBrowserScreen : IDisposable
             _contentsTask = null;
             _contents = contentsTask.IsFaulted
                 ? new AssetFileContents(_contentsSource?.FullPath ?? string.Empty, null, false, new Dictionary<string, int>(), Array.Empty<TextureInfo>(),
-                    new[] { contentsTask.Exception?.GetBaseException().Message ?? "Could not open file." })
+                    Array.Empty<SpriteInfo>(), new[] { contentsTask.Exception?.GetBaseException().Message ?? "Could not open file." })
                 : contentsTask.Result;
+            _pictures = _contents.Sprites.Select(s => new PictureEntry(s, null))
+                .Concat(_contents.Textures.Select(t => new PictureEntry(null, t)))
+                .ToList();
             _texIndex = 0;
             _texScroll = 0;
             UpdateTextureView();
@@ -284,7 +298,7 @@ public sealed class AssetBrowserScreen : IDisposable
             }
             else if (_textureView.Count > 0)
             {
-                _pane = Pane.Textures;
+                _pane = Pane.Pictures;
                 RequestTexture(_textureView[0]);
             }
         }
@@ -305,7 +319,7 @@ public sealed class AssetBrowserScreen : IDisposable
             }
             else if (decodeTask.IsFaulted)
             {
-                _previewError = decodeTask.Exception?.GetBaseException().Message ?? "Could not decode texture.";
+                _previewError = decodeTask.Exception?.GetBaseException().Message ?? "Could not decode this picture.";
                 _image = null;
                 UnloadGpuTexture();
             }
@@ -344,6 +358,7 @@ public sealed class AssetBrowserScreen : IDisposable
 
         _contentsSource = source;
         _contents = null;
+        _pictures = new List<PictureEntry>();
         _image = null;
         _previewError = null;
         _wantedTexture = null;
@@ -351,17 +366,19 @@ public sealed class AssetBrowserScreen : IDisposable
         _contentsTask = Task.Run(() => _reader.ReadContents(source));
     }
 
-    private void RequestTexture(TextureInfo texture)
+    private void RequestTexture(PictureEntry entry)
     {
-        _wantedTexture = texture;
+        _wantedTexture = entry;
         if (_decodeTask is not null || _contentsSource is null)
         {
             return;
         }
 
         ScannedFile source = _contentsSource;
-        _decodeFor = texture;
-        _decodeTask = Task.Run(() => _reader.DecodeTexture(source, texture));
+        _decodeFor = entry;
+        _decodeTask = Task.Run(() => entry.Sprite is SpriteInfo sprite
+            ? _reader.DecodeSprite(source, sprite)
+            : _reader.DecodeTexture(source, entry.Texture!));
     }
 
     private void StartReport()
@@ -443,7 +460,7 @@ public sealed class AssetBrowserScreen : IDisposable
         if (keys.WasPressed(KeyboardKey.Tab) || keys.WasPressed(KeyboardKey.Right) || keys.WasPressed(KeyboardKey.Left))
         {
             bool toTextures = keys.WasPressed(KeyboardKey.Right) || (keys.WasPressed(KeyboardKey.Tab) && _pane == Pane.Files);
-            _pane = toTextures && _textureView.Count > 0 ? Pane.Textures : Pane.Files;
+            _pane = toTextures && _textureView.Count > 0 ? Pane.Pictures : Pane.Files;
         }
 
         int move = 0;
@@ -511,11 +528,13 @@ public sealed class AssetBrowserScreen : IDisposable
         }
         else if (overTextures && _texScroll + row < _textureView.Count)
         {
-            _pane = Pane.Textures;
+            _pane = Pane.Pictures;
             _texIndex = _texScroll + row;
             RequestTexture(_textureView[_texIndex]);
         }
     }
+
+    private static string Plural(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 
     private static bool Repeat(KeyboardKey key) => Raylib.IsKeyPressed(key) || Raylib.IsKeyPressedRepeat(key);
 
@@ -551,21 +570,13 @@ public sealed class AssetBrowserScreen : IDisposable
         UpdateTextureView();
     }
 
-    /// <summary>When the filter matches some textures of the open file, list only those.</summary>
+    /// <summary>When the filter matches some pictures of the open file, list only those.</summary>
     private void UpdateTextureView()
     {
-        TextureInfo? selected = _texIndex < _textureView.Count ? _textureView[_texIndex] : null;
+        PictureEntry? selected = _texIndex < _textureView.Count ? _textureView[_texIndex] : null;
         string[] words = FilterWords;
-
-        if (_contents is null)
-        {
-            _textureView = new List<TextureInfo>();
-        }
-        else
-        {
-            List<TextureInfo> matching = words.Length == 0 ? new List<TextureInfo>() : _contents.Textures.Where(t => Matches(t.Name, words)).ToList();
-            _textureView = matching.Count > 0 ? matching : _contents.Textures.ToList();
-        }
+        List<PictureEntry> matching = words.Length == 0 ? new List<PictureEntry>() : _pictures.Where(p => Matches(p.Name, words)).ToList();
+        _textureView = matching.Count > 0 ? matching : _pictures.ToList();
 
         int keep = selected is null ? -1 : _textureView.IndexOf(selected);
         _texIndex = keep >= 0 ? keep : 0;
@@ -627,7 +638,7 @@ public sealed class AssetBrowserScreen : IDisposable
     {
         if (_image is null)
         {
-            SetStatus("Select a texture first.", Theme.Warn);
+            SetStatus("Select a picture first.", Theme.Warn);
             return;
         }
 
@@ -635,7 +646,7 @@ public sealed class AssetBrowserScreen : IDisposable
         {
             Directory.CreateDirectory(ExportFolder);
             string safeName = string.Concat(_image.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
-            string path = Path.Combine(ExportFolder, (safeName.Length > 0 ? safeName : "texture") + ".png");
+            string path = Path.Combine(ExportFolder, (safeName.Length > 0 ? safeName : "picture") + ".png");
 
             bool ok;
             fixed (byte* pixels = _image.Rgba)
@@ -785,7 +796,7 @@ public sealed class AssetBrowserScreen : IDisposable
 
     private void DrawTexturesPane()
     {
-        DrawPanel(TexX, TexW, _pane == Pane.Textures);
+        DrawPanel(TexX, TexW, _pane == Pane.Pictures);
 
         if (_contentsTask is not null)
         {
@@ -795,20 +806,25 @@ public sealed class AssetBrowserScreen : IDisposable
 
         if (_contents is null)
         {
-            Ui.Text("Textures", TexX + 10, PanelTop + 8, Font, Theme.Accent);
+            Ui.Text("Pictures", TexX + 10, PanelTop + 8, Font, Theme.Accent);
             Ui.Text("Pick a file on the left", TexX + 10, ListTop + 4, Font, Theme.TextDim);
             Ui.Text("and press Enter.", TexX + 10, ListTop + 4 + RowHeight, Font, Theme.TextDim);
             return;
         }
 
-        string texTitle = _textureView.Count == _contents.Textures.Count ? $"Textures {_contents.Textures.Count}" : $"Textures {_textureView.Count} / {_contents.Textures.Count}";
-        Ui.Text(texTitle, TexX + 10, PanelTop + 8, Font, Theme.Accent);
-        if (_contents.UnityVersion is string version && version != "0.0.0")
+        string title = _textureView.Count == _pictures.Count ? $"Pictures {_pictures.Count}" : $"Pictures {_textureView.Count} / {_pictures.Count}";
+        Ui.Text(title, TexX + 10, PanelTop + 8, Font, Theme.Accent);
+        if (_pictures.Count > 0)
         {
-            Ui.TextRight("Unity " + version, TexX + TexW - 10, PanelTop + 8, Font, Theme.TextDim);
+            string counts = _contents.Sprites.Count > 0 ? Plural(_contents.Sprites.Count, "sprite") : Plural(_contents.Textures.Count, "sheet");
+            int countsMax = TexW - 30 - Ui.Measure(title, Font);
+            if (Ui.Measure(counts, Font) <= countsMax)
+            {
+                Ui.TextRight(counts, TexX + TexW - 10, PanelTop + 8, Font, Theme.TextDim);
+            }
         }
 
-        if (_contents.Textures.Count == 0)
+        if (_pictures.Count == 0)
         {
             int y = ListTop + 4;
             foreach (string error in _contents.Errors.Take(3))
@@ -817,7 +833,7 @@ public sealed class AssetBrowserScreen : IDisposable
                 y += RowHeight;
             }
 
-            Ui.Text("No Texture2D here. Contains:", TexX + 10, y, Font, Theme.TextDim);
+            Ui.Text("No pictures here. Contains:", TexX + 10, y, Font, Theme.TextDim);
             y += RowHeight;
             foreach (KeyValuePair<string, int> kv in _contents.ClassCounts.OrderByDescending(kv => kv.Value).Take(18))
             {
@@ -836,15 +852,17 @@ public sealed class AssetBrowserScreen : IDisposable
                 break;
             }
 
-            TextureInfo texture = _textureView[index];
+            PictureEntry entry = _textureView[index];
             int y = ListTop + (row * RowHeight);
-            DrawRowHighlight(TexX, TexW, y, index == _texIndex, _pane == Pane.Textures);
+            DrawRowHighlight(TexX, TexW, y, index == _texIndex, _pane == Pane.Pictures);
 
-            string dims = $"{texture.Width}x{texture.Height}";
+            // Sheets (whole textures) show their size in the accent colour so they stand out from sprites.
+            bool sheet = entry.Texture is not null;
+            string dims = sheet ? $"sheet {entry.Width}x{entry.Height}" : $"{entry.Width}x{entry.Height}";
             int dimsWidth = Ui.Measure(dims, Font);
-            string name = texture.Name.Length > 0 ? texture.Name : "(no name)";
-            Ui.Text(Ui.FitEnd(name, Font, TexW - 30 - dimsWidth), TexX + 8, y + 1, Font, Theme.Text);
-            Ui.TextRight(dims, TexX + TexW - 8, y + 1, Font, Theme.TextDim);
+            string name = entry.Name.Length > 0 ? entry.Name : "(no name)";
+            Ui.Text(Ui.FitEnd(name, Font, TexW - 30 - dimsWidth), TexX + 8, y + 1, Font, sheet ? Theme.TextDim : Theme.Text);
+            Ui.TextRight(dims, TexX + TexW - 8, y + 1, Font, sheet ? Theme.Accent : Theme.TextDim);
         }
     }
 
@@ -864,6 +882,21 @@ public sealed class AssetBrowserScreen : IDisposable
             float h = texture.Height * scale;
             var dest = new Rectangle(area.X + ((area.Width - w) / 2), area.Y + ((area.Height - h) / 2), w, h);
             Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.Width, texture.Height), dest, Vector2.Zero, 0f, Color.White);
+
+            if (_image.Pivot is (float px, float py))
+            {
+                // The pivot is the point the game stands the sprite on (usually the feet).
+                int cx = (int)(dest.X + (px * scale));
+                int cy = (int)(dest.Y + (py * scale));
+                if (area.X <= cx && cx < area.X + area.Width && area.Y <= cy && cy < area.Y + area.Height)
+                {
+                    var shadow = new Color((byte)0, (byte)0, (byte)0, (byte)200);
+                    Raylib.DrawRectangle(cx - 9, cy - 1, 19, 3, shadow);
+                    Raylib.DrawRectangle(cx - 1, cy - 9, 3, 19, shadow);
+                    Raylib.DrawLine(cx - 8, cy, cx + 9, cy, Theme.Accent);
+                    Raylib.DrawLine(cx, cy - 8, cx, cy + 9, Theme.Accent);
+                }
+            }
         }
         else if (_decodeTask is not null)
         {
@@ -881,11 +914,23 @@ public sealed class AssetBrowserScreen : IDisposable
         {
             Ui.Text(Ui.FitEnd(_image.Name, Font, PreviewW - 20), PreviewX + 10, infoY, Font, Theme.Text);
             infoY += RowHeight;
-            Ui.Text($"{_image.Width} x {_image.Height}   {TextureDecoding.FormatName(_image.Format)}", PreviewX + 10, infoY, Font, Theme.TextDim);
+            string kind = _image.Pivot is null ? TextureDecoding.FormatName(_image.Format) : "sprite, + marks the pivot";
+            Ui.Text(Ui.FitEnd($"{_image.Width} x {_image.Height}   {kind}", Font, PreviewW - 20), PreviewX + 10, infoY, Font, Theme.TextDim);
             infoY += RowHeight;
+            if (_image.Sheet is string sheetName)
+            {
+                Ui.Text(Ui.FitMiddle("sheet " + sheetName, Font, PreviewW - 20), PreviewX + 10, infoY, Font, Theme.TextDim);
+                infoY += RowHeight;
+            }
+
+            if (_image.Detail is string detail)
+            {
+                Ui.Text(Ui.FitEnd(detail, Font, PreviewW - 20), PreviewX + 10, infoY, Font, Theme.TextDim);
+                infoY += RowHeight;
+            }
         }
 
-        if (_contentsSource is not null)
+        if (_contentsSource is not null && _image?.Sheet is null)
         {
             Ui.Text(Ui.FitMiddle(_contentsSource.DisplayName, Font, PreviewW - 20), PreviewX + 10, infoY, Font, Theme.TextDim);
             infoY += RowHeight;
