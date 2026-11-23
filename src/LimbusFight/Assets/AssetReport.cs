@@ -16,7 +16,7 @@ public static class AssetReport
     /// <summary>How many bundles / serialized files get opened for the deep sample.</summary>
     public const int DeepSampleSize = 60;
 
-    public static string Build(SteamCheckResult steam, AssetScanResult scan, UnityAssetReader reader, IProgress<string>? progress = null, CancellationToken cancel = default)
+    public static string Build(SteamCheckResult steam, AssetScanResult scan, UnityAssetReader reader, AssetCache? cache = null, IProgress<string>? progress = null, CancellationToken cancel = default)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Limbus Fight asset scan report");
@@ -78,6 +78,11 @@ public static class AssetReport
 
         Section(sb, "Name prefixes of browsable files");
         AppendHistogram(sb, "Prefix", scan.Browsable.Select(f => NamePrefix(f.DisplayName)), top: 80);
+
+        if (cache is not null)
+        {
+            AppendNames(sb, scan, cache);
+        }
 
         AppendDeepSample(sb, scan, reader, progress, cancel);
 
@@ -183,6 +188,39 @@ public static class AssetReport
         sb.AppendLine();
         sb.AppendLine($"Files with type trees: {withTypeTree} of {sample.Count}");
         sb.AppendLine("Texture formats in sample: " + string.Join(", ", formatTotals.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value}")));
+    }
+
+    private static void AppendNames(StringBuilder sb, AssetScanResult scan, AssetCache cache)
+    {
+        List<ScannedFile> browsable = scan.Browsable.ToList();
+        List<AssetName[]> indexed = browsable.Select(f => cache.GetNames(f.FullPath)).OfType<AssetName[]>().ToList();
+        List<AssetName> names = indexed.SelectMany(n => n).ToList();
+
+        Section(sb, $"Object names ({indexed.Count} of {browsable.Count} files indexed)");
+        foreach (NameKind kind in Enum.GetValues<NameKind>())
+        {
+            List<string> ofKind = names.Where(n => n.Kind == kind).Select(n => n.Name).ToList();
+            sb.AppendLine($"{kind}: {ofKind.Count} objects, {ofKind.Distinct(StringComparer.Ordinal).Count()} unique names");
+        }
+
+        sb.AppendLine($"Files with no textures, sprites or sounds: {indexed.Count(n => n.Length == 0)}");
+
+        foreach (NameKind kind in Enum.GetValues<NameKind>())
+        {
+            Section(sb, $"{kind} name prefixes");
+            AppendHistogram(sb, "Prefix", names.Where(n => n.Kind == kind).Select(n => AssetIndexer.Prefix(n.Name)), top: 200);
+        }
+
+        foreach ((NameKind kind, int cap) in new[] { (NameKind.Texture, 20000), (NameKind.Sprite, 20000), (NameKind.Audio, 6000) })
+        {
+            List<string> unique = names.Where(n => n.Kind == kind).Select(n => n.Name).Distinct(StringComparer.Ordinal)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+            Section(sb, $"All {kind} names ({unique.Count} unique{(unique.Count > cap ? $", first {cap}" : string.Empty)})");
+            foreach (string name in unique.Take(cap))
+            {
+                sb.AppendLine("    " + name);
+            }
+        }
     }
 
     private static void Section(StringBuilder sb, string title)

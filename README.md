@@ -21,6 +21,10 @@ two test fighters, F1 hitbox / FPS overlay and the red update screen.
 - **F3 asset browser:** lists every Unity bundle, opens it, previews any texture inside
   (DXT/BC, ETC, ASTC, Crunch and raw formats) and saves it as PNG to
   `%LOCALAPPDATA%\LimbusFight\exports` on request (Ctrl+S).
+- **Search by name:** Limbus Company's bundles have hash names, so the first run reads the names
+  of every texture, sprite and sound inside them. Typing in the browser then finds bundles by
+  those names. Names and file headers are remembered in `%LOCALAPPDATA%\LimbusFight\cache`, so
+  later runs only re-read files the game has changed.
 - **Asset report:** Ctrl+R in the browser (or `LimbusFight.exe --scan-assets`) writes
   `LimbusFight_asset_report.txt`: file names, sizes and formats only, user name redacted.
 - Refuses to read anything while Limbus Company is running, and never writes to the game's folders.
@@ -45,6 +49,8 @@ LimbusFight/
     ├── Assets/                      read-only access to the player's Limbus Company files
     │   ├── LimbusAssetRoots.cs      where the files are, is the game running
     │   ├── AssetScanner.cs          inventory by file header (bundle, audio bank, video...)
+    │   ├── AssetCache.cs            remembers headers + names between runs
+    │   ├── AssetIndexer.cs          reads texture / sprite / sound names for search
     │   ├── UnityAssetReader.cs      opens bundles, lists objects, reads textures (AssetsTools.NET)
     │   ├── TextureDecoding.cs       Unity texture formats -> RGBA
     │   ├── AssetReport.cs           LimbusFight_asset_report.txt

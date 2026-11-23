@@ -39,7 +39,17 @@ public sealed class AssetBrowserScreen : IDisposable
     }
 
     private readonly UnityAssetReader _reader = new();
+    private readonly UnityAssetReader _indexReader = new();
     private SteamCheckResult? _steam;
+    private AssetCache? _cache;
+
+    // ---- Name index (search inside hash-named bundles) -----------------------------------------
+    private Task? _indexTask;
+    private CancellationTokenSource? _indexCancel;
+    private bool _indexPending;
+    private volatile int _indexDone;
+    private volatile int _indexTotal;
+    private int _indexDoneAtLastFilter;
 
     // ---- Scan -------------------------------------------------------------------------------
     private Task<AssetScanResult>? _scanTask;
@@ -59,6 +69,7 @@ public sealed class AssetBrowserScreen : IDisposable
     private ScannedFile? _contentsSource;
     private ScannedFile? _wantedSource;
     private AssetFileContents? _contents;
+    private List<TextureInfo> _textureView = new();
     private int _texIndex;
     private int _texScroll;
 
@@ -129,6 +140,17 @@ public sealed class AssetBrowserScreen : IDisposable
     public void Dispose()
     {
         UnloadGpuTexture();
+        _indexCancel?.Cancel();
+        try
+        {
+            _indexTask?.Wait(TimeSpan.FromSeconds(3)); // lets the indexer save what it has
+        }
+        catch (AggregateException)
+        {
+            // indexing errors are not fatal on exit
+        }
+
+        _indexReader.Dispose();
         _reader.Dispose();
     }
 
@@ -146,9 +168,63 @@ public sealed class AssetBrowserScreen : IDisposable
         _scan = null;
         _scanError = null;
         _scanCount = 0;
+        _indexCancel?.Cancel();
         IReadOnlyList<AssetRoot> roots = LimbusAssetRoots.Find(_steam);
         var progress = new InlineProgress<int>(n => _scanCount = n);
-        _scanTask = Task.Run(() => AssetScanner.Scan(roots, progress));
+        _scanTask = Task.Run(() =>
+        {
+            _cache ??= AssetCache.Load();
+            return AssetScanner.Scan(roots, _cache, progress);
+        });
+    }
+
+    /// <summary>Reads the names inside every bundle not indexed yet (first run only; later runs use the cache).</summary>
+    private void StartIndex()
+    {
+        if (_scan is null || _cache is null || _scan.GameWasRunning)
+        {
+            return;
+        }
+
+        if (_indexTask is not null)
+        {
+            _indexPending = true; // restart once the running pass has stopped
+            return;
+        }
+
+        _indexPending = false;
+        _indexCancel = new CancellationTokenSource();
+        CancellationToken cancel = _indexCancel.Token;
+        AssetCache cache = _cache;
+        List<ScannedFile> files = _all.ToList();
+        var progress = new InlineProgress<(int Done, int Total)>(p =>
+        {
+            _indexDone = p.Done;
+            _indexTotal = p.Total;
+        });
+
+        _indexDone = 0;
+        _indexTotal = files.Count(f => cache.GetNames(f.FullPath) is null);
+        _indexDoneAtLastFilter = 0;
+
+        _indexTask = Task.Run(() =>
+        {
+            try
+            {
+                AssetIndexer.IndexMissing(files, cache, _indexReader, progress, cancel);
+            }
+            finally
+            {
+                try
+                {
+                    cache.Save();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // the cache is an optimisation only
+                }
+            }
+        });
     }
 
     private void PollBackgroundWork()
@@ -163,12 +239,32 @@ public sealed class AssetBrowserScreen : IDisposable
             else
             {
                 _scan = scanTask.Result;
-                _all = _scan.Browsable
-                    .OrderBy(f => f.RootKind == LimbusAssetRoots.CacheRootKind ? 0 : 1)
-                    .ThenBy(f => f.DisplayName, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                SortFiles(_scan.Browsable);
                 ApplyFilter();
+                StartIndex();
             }
+        }
+
+        if (_indexTask is { IsCompleted: true } indexTask)
+        {
+            _indexTask = null;
+            _ = indexTask.Exception;
+            if (_indexPending)
+            {
+                StartIndex();
+            }
+            else if (_scan is not null)
+            {
+                SortFiles(_all);
+                ApplyFilter();
+                int named = _all.Count(f => _cache?.GetNames(f.FullPath) is { Length: > 0 });
+                SetStatus($"Search ready: names read from {named} files. Type a name, e.g. a Sinner or a boss.", Theme.Good);
+            }
+        }
+        else if (_indexTask is not null && _filter.Length > 0 && _indexDone - _indexDoneAtLastFilter >= 50)
+        {
+            _indexDoneAtLastFilter = _indexDone;
+            ApplyFilter(); // results grow while the first index runs
         }
 
         if (_contentsTask is { IsCompleted: true } contentsTask)
@@ -180,15 +276,16 @@ public sealed class AssetBrowserScreen : IDisposable
                 : contentsTask.Result;
             _texIndex = 0;
             _texScroll = 0;
+            UpdateTextureView();
 
             if (_wantedSource is not null && _wantedSource != _contentsSource)
             {
                 RequestContents(_wantedSource);
             }
-            else if (_contents.Textures.Count > 0)
+            else if (_textureView.Count > 0)
             {
                 _pane = Pane.Textures;
-                RequestTexture(_contents.Textures[0]);
+                RequestTexture(_textureView[0]);
             }
         }
 
@@ -282,9 +379,10 @@ public sealed class AssetBrowserScreen : IDisposable
 
         SteamCheckResult steam = _steam;
         AssetScanResult scan = _scan;
+        AssetCache? cache = _cache;
         var progress = new InlineProgress<string>(text => _reportProgress = text);
         _reportProgress = "Writing report...";
-        _reportTask = Task.Run(() => AssetReport.Write(AssetReport.Build(steam, scan, _reader, progress)));
+        _reportTask = Task.Run(() => AssetReport.Write(AssetReport.Build(steam, scan, _reader, cache, progress)));
     }
 
     // =========================================================================================
@@ -345,7 +443,7 @@ public sealed class AssetBrowserScreen : IDisposable
         if (keys.WasPressed(KeyboardKey.Tab) || keys.WasPressed(KeyboardKey.Right) || keys.WasPressed(KeyboardKey.Left))
         {
             bool toTextures = keys.WasPressed(KeyboardKey.Right) || (keys.WasPressed(KeyboardKey.Tab) && _pane == Pane.Files);
-            _pane = toTextures && _contents is { Textures.Count: > 0 } ? Pane.Textures : Pane.Files;
+            _pane = toTextures && _textureView.Count > 0 ? Pane.Textures : Pane.Files;
         }
 
         int move = 0;
@@ -369,11 +467,11 @@ public sealed class AssetBrowserScreen : IDisposable
                 RequestContents(_visible[_fileIndex]);
             }
         }
-        else if (_contents is { Textures.Count: > 0 } contents && move != 0)
+        else if (_textureView.Count > 0 && move != 0)
         {
-            _texIndex = Math.Clamp((int)Math.Clamp((long)_texIndex + move, int.MinValue, int.MaxValue), 0, contents.Textures.Count - 1);
+            _texIndex = Math.Clamp((int)Math.Clamp((long)_texIndex + move, int.MinValue, int.MaxValue), 0, _textureView.Count - 1);
             _texScroll = KeepVisible(_texIndex, _texScroll);
-            RequestTexture(contents.Textures[_texIndex]);
+            RequestTexture(_textureView[_texIndex]);
         }
     }
 
@@ -393,9 +491,9 @@ public sealed class AssetBrowserScreen : IDisposable
             {
                 _fileScroll = Math.Clamp(_fileScroll + delta, 0, Math.Max(0, _visible.Count - VisibleRows));
             }
-            else if (overTextures && _contents is not null)
+            else if (overTextures)
             {
-                _texScroll = Math.Clamp(_texScroll + delta, 0, Math.Max(0, _contents.Textures.Count - VisibleRows));
+                _texScroll = Math.Clamp(_texScroll + delta, 0, Math.Max(0, _textureView.Count - VisibleRows));
             }
         }
 
@@ -411,11 +509,11 @@ public sealed class AssetBrowserScreen : IDisposable
             _fileIndex = _fileScroll + row;
             RequestContents(_visible[_fileIndex]);
         }
-        else if (overTextures && _contents is not null && _texScroll + row < _contents.Textures.Count)
+        else if (overTextures && _texScroll + row < _textureView.Count)
         {
             _pane = Pane.Textures;
             _texIndex = _texScroll + row;
-            RequestTexture(_contents.Textures[_texIndex]);
+            RequestTexture(_textureView[_texIndex]);
         }
     }
 
@@ -436,14 +534,89 @@ public sealed class AssetBrowserScreen : IDisposable
         return scroll;
     }
 
+    private string[] FilterWords => _filter.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool Matches(string text, string[] words) =>
+        words.All(w => text.Contains(w, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A file matches if its name, or the name of any texture / sprite / sound inside it, contains every word.</summary>
     private void ApplyFilter()
     {
-        string[] words = _filter.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string[] words = FilterWords;
         _visible = words.Length == 0
             ? _all
-            : _all.Where(f => words.All(w => f.DisplayName.Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
+            : _all.Where(f => Matches(f.DisplayName, words) || (_cache?.GetNames(f.FullPath)?.Any(n => Matches(n.Name, words)) ?? false)).ToList();
         _fileIndex = Math.Clamp(_fileIndex, 0, Math.Max(0, _visible.Count - 1));
         _fileScroll = Math.Clamp(KeepVisible(_fileIndex, _fileScroll), 0, Math.Max(0, _visible.Count - VisibleRows));
+        UpdateTextureView();
+    }
+
+    /// <summary>When the filter matches some textures of the open file, list only those.</summary>
+    private void UpdateTextureView()
+    {
+        TextureInfo? selected = _texIndex < _textureView.Count ? _textureView[_texIndex] : null;
+        string[] words = FilterWords;
+
+        if (_contents is null)
+        {
+            _textureView = new List<TextureInfo>();
+        }
+        else
+        {
+            List<TextureInfo> matching = words.Length == 0 ? new List<TextureInfo>() : _contents.Textures.Where(t => Matches(t.Name, words)).ToList();
+            _textureView = matching.Count > 0 ? matching : _contents.Textures.ToList();
+        }
+
+        int keep = selected is null ? -1 : _textureView.IndexOf(selected);
+        _texIndex = keep >= 0 ? keep : 0;
+        _texScroll = Math.Clamp(KeepVisible(_texIndex, _texScroll), 0, Math.Max(0, _textureView.Count - VisibleRows));
+    }
+
+    /// <summary>Named files first, alphabetically by their main texture / sprite / sound name; hash-only files last.</summary>
+    private void SortFiles(IEnumerable<ScannedFile> files)
+    {
+        _all = files
+            .Select(f => (File: f, Name: BestName(f)))
+            .OrderBy(x => x.Name is null ? 1 : 0)
+            .ThenBy(x => x.Name ?? x.File.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.File)
+            .ToList();
+    }
+
+    private string? BestName(ScannedFile file)
+    {
+        AssetName[]? names = _cache?.GetNames(file.FullPath);
+        if (names is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        foreach (NameKind kind in new[] { NameKind.Texture, NameKind.Sprite, NameKind.Audio })
+        {
+            foreach (AssetName name in names)
+            {
+                if (name.Kind == kind)
+                {
+                    return name.Name;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>What a file row shows: a matching (or the main) object name, else the bundle's hash name.</summary>
+    private string Label(ScannedFile file, string[] words)
+    {
+        AssetName[]? names = _cache?.GetNames(file.FullPath);
+        if (names is not { Length: > 0 })
+        {
+            return file.DisplayName;
+        }
+
+        string? match = words.Length == 0 ? null : names.FirstOrDefault(n => Matches(n.Name, words)).Name;
+        string main = match ?? BestName(file) ?? file.DisplayName;
+        return names.Length > 1 ? $"{main}  +{names.Length - 1}" : main;
     }
 
     // =========================================================================================
@@ -540,6 +713,11 @@ public sealed class AssetBrowserScreen : IDisposable
             text = $"Scanning Limbus Company files... {_scanCount} checked";
             color = Theme.Warn;
         }
+        else if (_indexTask is not null && _indexTotal > 0)
+        {
+            text = $"Reading names for search: {_indexDone} / {_indexTotal} files (only the first time; you can browse meanwhile)";
+            color = Theme.Warn;
+        }
         else if (_scanError is not null)
         {
             text = "Scan failed: " + _scanError;
@@ -579,6 +757,7 @@ public sealed class AssetBrowserScreen : IDisposable
         int filterMax = FilesW - 30 - Ui.Measure(title, Font);
         Ui.TextRight(Ui.FitEnd(filter, Font, filterMax), FilesX + FilesW - 10, PanelTop + 8, Font, _filter.Length > 0 ? Theme.Text : Theme.TextDim);
 
+        string[] words = FilterWords;
         for (int row = 0; row < VisibleRows; row++)
         {
             int index = _fileScroll + row;
@@ -594,7 +773,7 @@ public sealed class AssetBrowserScreen : IDisposable
             string size = AssetReport.Bytes(file.Size);
             int sizeWidth = Ui.Measure(size, Font);
             Color nameColor = file == _contentsSource ? Theme.Accent : Theme.Text;
-            Ui.Text(Ui.FitMiddle(file.DisplayName, Font, FilesW - 30 - sizeWidth), FilesX + 8, y + 1, Font, nameColor);
+            Ui.Text(Ui.FitMiddle(Label(file, words), Font, FilesW - 30 - sizeWidth), FilesX + 8, y + 1, Font, nameColor);
             Ui.TextRight(size, FilesX + FilesW - 8, y + 1, Font, Theme.TextDim);
         }
 
@@ -622,8 +801,9 @@ public sealed class AssetBrowserScreen : IDisposable
             return;
         }
 
-        Ui.Text($"Textures {_contents.Textures.Count}", TexX + 10, PanelTop + 8, Font, Theme.Accent);
-        if (_contents.UnityVersion is string version)
+        string texTitle = _textureView.Count == _contents.Textures.Count ? $"Textures {_contents.Textures.Count}" : $"Textures {_textureView.Count} / {_contents.Textures.Count}";
+        Ui.Text(texTitle, TexX + 10, PanelTop + 8, Font, Theme.Accent);
+        if (_contents.UnityVersion is string version && version != "0.0.0")
         {
             Ui.TextRight("Unity " + version, TexX + TexW - 10, PanelTop + 8, Font, Theme.TextDim);
         }
@@ -651,12 +831,12 @@ public sealed class AssetBrowserScreen : IDisposable
         for (int row = 0; row < VisibleRows; row++)
         {
             int index = _texScroll + row;
-            if (index >= _contents.Textures.Count)
+            if (index >= _textureView.Count)
             {
                 break;
             }
 
-            TextureInfo texture = _contents.Textures[index];
+            TextureInfo texture = _textureView[index];
             int y = ListTop + (row * RowHeight);
             DrawRowHighlight(TexX, TexW, y, index == _texIndex, _pane == Pane.Textures);
 

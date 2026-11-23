@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.IO.Enumeration;
 using System.Text;
 
 namespace LimbusFight.Assets;
@@ -71,8 +72,8 @@ public sealed class AssetScanResult
 }
 
 /// <summary>
-/// Inventories the Limbus Company asset roots by reading only the first 64 bytes of each file.
-/// Never writes, never keeps files open, and refuses to run while the game is open.
+/// Inventories the Limbus Company asset roots by reading only the first 64 bytes of each new or
+/// changed file. Never writes to the game's folders and refuses to run while the game is open.
 /// </summary>
 public static class AssetScanner
 {
@@ -83,8 +84,11 @@ public static class AssetScanner
         "globalgamemanagers", "globalgamemanagers.assets", "resources.assets", "unity default resources", "unity_builtin_extra",
     };
 
-    /// <summary>Scans every existing root. <paramref name="progress"/> receives the number of files examined so far.</summary>
-    public static AssetScanResult Scan(IReadOnlyList<AssetRoot> roots, IProgress<int>? progress = null, CancellationToken cancel = default)
+    /// <summary>
+    /// Scans every existing root. Files whose size and modification time match <paramref name="cache"/>
+    /// are not opened again. <paramref name="progress"/> receives the number of files examined so far.
+    /// </summary>
+    public static AssetScanResult Scan(IReadOnlyList<AssetRoot> roots, AssetCache? cache = null, IProgress<int>? progress = null, CancellationToken cancel = default)
     {
         var watch = Stopwatch.StartNew();
         var files = new List<ScannedFile>();
@@ -109,10 +113,16 @@ public static class AssetScanner
 
         foreach (AssetRoot root in roots.Where(r => r.Exists))
         {
-            IEnumerable<string> paths;
+            IEnumerable<(string Path, long Size, long Ticks)> entries;
             try
             {
-                paths = Directory.EnumerateFiles(root.Path, "*", options);
+                entries = new FileSystemEnumerable<(string, long, long)>(
+                    root.Path,
+                    (ref FileSystemEntry entry) => (entry.ToFullPath(), entry.Length, entry.LastWriteTimeUtc.UtcTicks),
+                    options)
+                {
+                    ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
+                };
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -120,11 +130,14 @@ public static class AssetScanner
                 continue;
             }
 
-            foreach (string path in paths)
+            foreach ((string path, long size, long ticks) in entries)
             {
                 cancel.ThrowIfCancellationRequested();
 
-                ScannedFile? scanned = Examine(root, path, buffer, errors);
+                ScannedFile? scanned = cache is not null && cache.TryGet(path, size, ticks, out CachedFile cached)
+                    ? FromCache(root, cached)
+                    : Examine(root, path, size, ticks, buffer, cache, errors);
+
                 if (scanned is not null)
                 {
                     files.Add(scanned);
@@ -138,34 +151,71 @@ public static class AssetScanner
             }
         }
 
+        cache?.KeepOnly(files.Select(f => f.FullPath));
         progress?.Report(examined);
         return new AssetScanResult { Roots = roots, Files = files, GameWasRunning = false, Elapsed = watch.Elapsed, Errors = errors };
     }
 
-    private static ScannedFile? Examine(AssetRoot root, string path, byte[] buffer, List<string> errors)
+    private static ScannedFile FromCache(AssetRoot root, CachedFile cached)
     {
-        long size;
-        int read;
+        string relative = Path.GetRelativePath(root.Path, cached.FullPath).Replace('\\', '/');
+        return new ScannedFile
+        {
+            RootKind = root.Kind,
+            FullPath = cached.FullPath,
+            RelativePath = relative,
+            DisplayName = MakeDisplayName(root.Kind, relative),
+            Size = cached.Size,
+            Kind = cached.Kind,
+            Detail = cached.Detail,
+            UnityVersion = cached.UnityVersion,
+            Compression = cached.Compression,
+            BundleFlags = cached.Flags,
+            HeaderHex = cached.HeaderHex,
+        };
+    }
 
-        try
+    private static ScannedFile? Examine(AssetRoot root, string path, long size, long ticks, byte[] buffer, AssetCache? cache, List<string> errors)
+    {
+        string fileName = Path.GetFileName(path);
+        int read = 0;
+
+        // Unity writes a small "__info" text file next to every cached bundle: no need to open it.
+        if (fileName != "__info")
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
-            size = stream.Length;
-            read = stream.ReadAtLeast(buffer, Math.Min(HeaderBytes, (int)Math.Min(size, HeaderBytes)), throwOnEndOfStream: false);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            if (errors.Count < 50)
+            try
             {
-                errors.Add($"{root.Kind}: cannot read {Path.GetFileName(path)} ({ex.Message})");
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
+                read = stream.ReadAtLeast(buffer, (int)Math.Min(size, HeaderBytes), throwOnEndOfStream: false);
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (errors.Count < 50)
+                {
+                    errors.Add($"{root.Kind}: cannot read {fileName} ({ex.Message})");
+                }
 
-            return null;
+                return null;
+            }
         }
 
         string relative = Path.GetRelativePath(root.Path, path).Replace('\\', '/');
         ReadOnlySpan<byte> header = buffer.AsSpan(0, read);
-        Sniffed sniffed = Sniff(Path.GetFileName(path), header);
+        Sniffed sniffed = fileName == "__info" ? new Sniffed(AssetFileKind.Text, "Unity cache info") : Sniff(fileName, header);
+        string headerHex = Convert.ToHexString(header[..Math.Min(16, header.Length)]);
+
+        cache?.Put(new CachedFile
+        {
+            FullPath = path,
+            Size = size,
+            ModifiedTicks = ticks,
+            Kind = sniffed.Kind,
+            Detail = sniffed.Detail,
+            UnityVersion = sniffed.UnityVersion,
+            Compression = sniffed.Compression,
+            Flags = sniffed.Flags,
+            HeaderHex = headerHex,
+        });
 
         return new ScannedFile
         {
@@ -179,7 +229,7 @@ public static class AssetScanner
             UnityVersion = sniffed.UnityVersion,
             Compression = sniffed.Compression,
             BundleFlags = sniffed.Flags,
-            HeaderHex = Convert.ToHexString(header[..Math.Min(16, header.Length)]),
+            HeaderHex = headerHex,
         };
     }
 

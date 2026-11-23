@@ -95,6 +95,27 @@ public sealed class UnityAssetReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// Fast listing of texture, sprite and sound names: reads only each object's name, not its data.
+    /// Throws <see cref="InvalidOperationException"/> if Limbus Company is running.
+    /// </summary>
+    public AssetName[] ReadNames(ScannedFile source)
+    {
+        lock (_gate)
+        {
+            Open(source);
+            var names = new List<AssetName>();
+            foreach (AssetsFileInstance inst in _files)
+            {
+                AddNames(inst, AssetClassID.Texture2D, NameKind.Texture, names);
+                AddNames(inst, AssetClassID.Sprite, NameKind.Sprite, names);
+                AddNames(inst, AssetClassID.AudioClip, NameKind.Audio, names);
+            }
+
+            return names.ToArray();
+        }
+    }
+
     /// <summary>Reads and decodes one texture. Throws <see cref="InvalidDataException"/> with a readable reason on failure.</summary>
     public DecodedImage DecodeTexture(ScannedFile source, TextureInfo texture)
     {
@@ -249,6 +270,45 @@ public sealed class UnityAssetReader : IDisposable
         stream.Position = offset;
         stream.ReadExactly(buffer);
         return buffer;
+    }
+
+    private void AddNames(AssetsFileInstance inst, AssetClassID type, NameKind kind, List<AssetName> names)
+    {
+        foreach (AssetFileInfo info in inst.file.GetAssetsOfType(type))
+        {
+            string? name = ReadName(inst, info);
+            if (!string.IsNullOrEmpty(name))
+            {
+                names.Add(new AssetName(kind, name));
+            }
+        }
+    }
+
+    /// <summary>m_Name is the first field of Texture2D / Sprite / AudioClip, so it can be read directly.</summary>
+    private string? ReadName(AssetsFileInstance inst, AssetFileInfo info)
+    {
+        try
+        {
+            AssetsFile file = inst.file;
+            if (file.Metadata.TypeTreeEnabled)
+            {
+                TypeTreeType? type = file.Metadata.FindTypeTreeTypeByID(info.TypeId, info.GetScriptIndex(file));
+                if (type is not null && type.Nodes.Count > 1 && type.Nodes[1].GetNameString(type.StringBufferBytes) == "m_Name")
+                {
+                    lock (file.Reader)
+                    {
+                        file.Reader.Position = info.GetAbsoluteByteOffset(file);
+                        return file.Reader.ReadCountStringInt32();
+                    }
+                }
+            }
+
+            return _manager.GetBaseField(inst, info)["m_Name"].AsString;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null;
+        }
     }
 
     private static string ClassName(int typeId) =>
