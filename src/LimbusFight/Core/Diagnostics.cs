@@ -122,8 +122,12 @@ public static class SelfTest
             var fighter = new LimbusFight.Roster.FighterData { Name = "Probe" };
             fighter.Punch.Startup = 6;
             var fighterBack = LimbusFight.Roster.FighterStore.Deserialize(LimbusFight.Roster.FighterStore.Serialize(fighter));
+            var defaults = new LimbusFight.Roster.FighterData().ToStats();
             bool fighterOk = fighterBack.Name == "Probe" && fighterBack.ToStats().Punch.Startup == 6
-                && new LimbusFight.Roster.FighterData().ToStats() == LimbusFight.Gameplay.FighterStats.Default with { Name = "Training Box" };
+                && defaults.Punch == LimbusFight.Gameplay.AttackData.TestPunch
+                && defaults.MaxHp == LimbusFight.Gameplay.FighterStats.Default.MaxHp
+                && defaults.Ego is { } ego && ego.SinCost.SequenceEqual(LimbusFight.Gameplay.AttackData.DefaultEgo.SinCost)
+                && defaults.Skill3?.Coins == LimbusFight.Gameplay.AttackData.DefaultSkill3.Coins;
             Console.WriteLine($"  fighter file        : {(fighterOk ? "ok" : "FAILED")}");
             return jsonOk && cutOk && fighterOk;
         }

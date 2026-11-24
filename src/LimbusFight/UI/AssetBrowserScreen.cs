@@ -106,6 +106,9 @@ public sealed class AssetBrowserScreen : IDisposable
     /// <summary>Fighter looks; Ctrl+1..5 adds the selected picture to one (set by Program).</summary>
     public LookManager? Looks { get; set; }
 
+    /// <summary>Where Ctrl+Q adds a picture: the slot and clip selected in the F4 look editor (set by Program).</summary>
+    public Func<(LookSlot Slot, ClipId Clip)>? SelectedClip { get; set; }
+
     /// <summary>Fighter files; an auto look names a still-unnamed fighter after the detected Sinner.</summary>
     public RosterManager? Roster { get; set; }
 
@@ -472,6 +475,11 @@ public sealed class AssetBrowserScreen : IDisposable
             if (keys.WasPressed(KeyboardKey.A))
             {
                 AutoLookFromFile(shift ? LookSlot.Dummy : LookSlot.Player1);
+            }
+
+            if (keys.WasPressed(KeyboardKey.Q) && SelectedClip?.Invoke() is (LookSlot qSlot, ClipId qClip))
+            {
+                AddToLook(qSlot, qClip);
             }
 
             if (keys.WasPressed(KeyboardKey.Z))
@@ -1045,7 +1053,7 @@ public sealed class AssetBrowserScreen : IDisposable
         {
             Ui.Text(Ui.FitEnd("Ctrl+A  auto look for P1 from this file", Font, PreviewW - 20), PreviewX + 10, infoY + 6, Font, Theme.Accent);
             Ui.Text(Ui.FitEnd("Ctrl+1-5 pose: idle walk jump punch hit, 6/7 fx", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + RowHeight, Font, Theme.Text);
-            Ui.Text(Ui.FitEnd("+Shift = Dummy  Ctrl+Z undo  Ctrl+S save PNG", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + (2 * RowHeight), Font, Theme.TextDim);
+            Ui.Text(Ui.FitEnd("Ctrl+Q add to F4's clip  +Shift Dummy  Ctrl+Z undo", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + (2 * RowHeight), Font, Theme.TextDim);
         }
     }
 

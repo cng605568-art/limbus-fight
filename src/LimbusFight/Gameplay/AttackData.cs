@@ -5,8 +5,40 @@ namespace LimbusFight.Gameplay;
 /// distances in stage pixels, and geometry is described for a fighter facing RIGHT
 /// (it is mirrored automatically when facing left).
 /// </summary>
+/// <summary>Which button a move is on.</summary>
+public enum MoveSlot
+{
+    Skill1,
+    Skill2,
+    Skill3,
+    Ego,
+}
+
+/// <summary>A Sin and how many of its resources an E.G.O costs.</summary>
+public sealed record SinCost(Sin Sin, int Amount);
+
 public sealed record AttackData
 {
+    /// <summary>The button this move is on (decides its poses and effects).</summary>
+    public MoveSlot Slot { get; init; } = MoveSlot.Skill1;
+
+    /// <summary>Coins = hits: each coin is one hit, spread through the active frames.</summary>
+    public int Coins { get; init; } = 1;
+
+    /// <summary>Frames between coin hits.</summary>
+    public int CoinInterval { get; init; } = 4;
+
+    /// <summary>E.G.O only: the Sin resources it costs (all must be available).</summary>
+    public IReadOnlyList<SinCost> SinCost { get; init; } = Array.Empty<SinCost>();
+
+    /// <summary>E.G.O grade shown on use: ZAYIN, TETH, HE, WAW or ALEPH.</summary>
+    public string Grade { get; init; } = string.Empty;
+
+    /// <summary>Spends this much Charge (if the fighter has it) for <see cref="ChargeBonusDamage"/> per hit.</summary>
+    public int ChargeCost { get; init; }
+
+    public int ChargeBonusDamage { get; init; }
+
     public required string Name { get; init; }
 
     /// <summary>Frames before the hitbox appears (the press frame is frame 1).</summary>
@@ -88,5 +120,30 @@ public sealed record AttackData
         HitboxOffsetY = -154f,
         HitboxHeight = 30f,
         LimbHurtboxWidth = 80f,
+    };
+
+    /// <summary>Training box Skill 2: slower, harder, Pierce.</summary>
+    public static AttackData DefaultSkill2 { get; } = TestPunch with
+    {
+        Slot = MoveSlot.Skill2, Name = "Skill 2", Startup = 9, Active = 4, Recovery = 14, Hitstun = 20, Hitstop = 10, Pushback = 9f,
+        HitboxOffsetX = 18f, HitboxWidth = 118f, HitboxOffsetY = -130f, HitboxHeight = 40f, LimbHurtboxWidth = 100f,
+        Damage = 12, StaggerDamage = 10, ClashPower = 13f, DamageType = DamageType.Pierce, Sin = Sin.Gloom,
+    };
+
+    /// <summary>Training box Skill 3: two coins (two hits), Slash.</summary>
+    public static AttackData DefaultSkill3 { get; } = TestPunch with
+    {
+        Slot = MoveSlot.Skill3, Name = "Skill 3", Startup = 12, Active = 10, Recovery = 18, Hitstun = 18, Hitstop = 8, Pushback = 6f,
+        HitboxOffsetX = 10f, HitboxWidth = 140f, HitboxOffsetY = -170f, HitboxHeight = 90f, LimbHurtboxWidth = 110f,
+        Damage = 9, StaggerDamage = 8, ClashPower = 16f, DamageType = DamageType.Slash, Sin = Sin.Lust, Coins = 2, CoinInterval = 6,
+    };
+
+    /// <summary>Training box E.G.O: costs 4 Wrath, three coins, big damage.</summary>
+    public static AttackData DefaultEgo { get; } = TestPunch with
+    {
+        Slot = MoveSlot.Ego, Name = "E.G.O", Startup = 14, Active = 14, Recovery = 22, Hitstun = 26, Hitstop = 12, Pushback = 10f,
+        HitboxOffsetX = 0f, HitboxWidth = 190f, HitboxOffsetY = -200f, HitboxHeight = 160f, LimbHurtboxWidth = 120f,
+        Damage = 14, StaggerDamage = 14, ClashPower = 25f, DamageType = DamageType.Slash, Sin = Sin.Wrath, Coins = 3, CoinInterval = 6,
+        SinCost = new[] { new SinCost(Sin.Wrath, 4) }, Grade = "TETH",
     };
 }

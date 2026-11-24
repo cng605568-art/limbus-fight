@@ -41,6 +41,7 @@ public static class AutoLook
         Guard,
         Down,
         Excluded,
+        Ego,
     }
 
     private sealed record Rule(Regex Pattern, Role Role, int Weight, string Word);
@@ -112,7 +113,8 @@ public static class AutoLook
 
         Add(Role.Attack, 6, "attack", "atk", "att", "punch", "kick", "strike", "swing", "slash", "stab", "thrust", "pierce", "blunt",
             "combo", "shoot", "shot", "fire", "throw", "smash", "cleave", "lunge");
-        Add(Role.Attack, 5, "skill", "sk", "s", "ego", "special", "ult", "ultimate", "coin", "clash", "finish", "finisher");
+        Add(Role.Ego, 7, "ego", "corrosion", "egoskill", "awaken", "awakening");
+        Add(Role.Attack, 5, "skill", "sk", "s", "special", "ult", "ultimate", "coin", "clash", "finish", "finisher");
 
         Add(Role.Hit, 6, "damage", "damaged", "dmg", "hurt", "hit", "hitted", "struck", "flinch", "stagger", "staggered", "groggy", "knockback", "knock");
         Add(Role.Down, 4, "dead", "die", "death", "down", "ko", "defeat", "defeated", "panic", "faint", "collapse");
@@ -161,6 +163,13 @@ public static class AutoLook
         Group? walk = Best(groups, Role.Walk, "walk", "move", "run", "dash");
         Group? jump = Best(groups, Role.Jump, "jump", "air", "fall");
         Group? attack = BestAttack(groups);
+
+        // Skills 2 and 3: attack groups numbered 2 / 3 (S2, Skill2, Attack3...), not already Skill 1.
+        Group? skill2 = groups.Where(g => g.Role == Role.Attack && g != attack && SkillNumber(g.Base) == 2).OrderBy(g => g.Base, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+        Group? skill3 = groups.Where(g => g.Role == Role.Attack && g != attack && SkillNumber(g.Base) == 3).OrderBy(g => g.Base, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+        Group? guard = Best(groups, Role.Guard, "guard", "block", "defense", "def", "parry", "counter");
+        Group? evade = Best(groups, Role.Evade, "evade", "dodge");
+        Group? ego = Best(groups, Role.Ego, "ego", "corrosion");
         Group? hit = Best(groups, Role.Hit, "damage", "damaged", "dmg", "hurt", "hit");
 
         string jumpNote = "name says '{0}'";
@@ -185,7 +194,13 @@ public static class AutoLook
             .Where(x => x.Read.Kind is EffectKind.Swing or EffectKind.Hit)
             .Select(x => (x.Group, x.Read.Kind, x.Read.Word))
             .ToList();
-        (Group Group, EffectKind Kind, string Word)? swingFx = BestEffect(effects, EffectKind.Swing);
+        // Swing effects by skill: unnumbered / 1 = Skill 1, 2 / 3 = Skills 2 / 3, "ego" = E.G.O.
+        var swings = effects.Where(e => e.Kind == EffectKind.Swing).ToList();
+        (Group Group, EffectKind Kind, string Word)? egoFx = swings.Where(e => Words(e.Group.Base).Contains("ego")).Select(e => ((Group, EffectKind, string)?)e).FirstOrDefault();
+        (Group Group, EffectKind Kind, string Word)? skill2Fx = BestEffect(swings.Where(e => SkillNumber(e.Group.Base) == 2).ToList(), EffectKind.Swing);
+        (Group Group, EffectKind Kind, string Word)? skill3Fx = BestEffect(swings.Where(e => SkillNumber(e.Group.Base) == 3).ToList(), EffectKind.Swing);
+        (Group Group, EffectKind Kind, string Word)? swingFx = BestEffect(swings.Where(e => SkillNumber(e.Group.Base) <= 1 && !Words(e.Group.Base).Contains("ego")).ToList(), EffectKind.Swing)
+            ?? BestEffect(swings, EffectKind.Swing);
         (Group Group, EffectKind Kind, string Word)? hitFx = BestEffect(effects, EffectKind.Hit);
         if (swingFx is { } sw)
         {
@@ -204,6 +219,25 @@ public static class AutoLook
         Fill(look, picks, ClipId.Hit, hit, makeFrame, hitNote);
         Fill(look, picks, ClipId.SwingFx, swingFx?.Group, makeFrame, "effect name says '{0}'");
         Fill(look, picks, ClipId.HitFx, hitFx?.Group, makeFrame, "effect name says '{0}'");
+        Fill(look, picks, ClipId.Skill2, skill2, makeFrame, "name says '{0}' 2");
+        Fill(look, picks, ClipId.Skill3, skill3, makeFrame, "name says '{0}' 3");
+        Fill(look, picks, ClipId.Guard, guard, makeFrame, "name says '{0}'");
+        Fill(look, picks, ClipId.Evade, evade, makeFrame, "name says '{0}'");
+        Fill(look, picks, ClipId.Ego, ego, makeFrame, "name says '{0}'");
+        if (skill2Fx is { } s2fx && s2fx.Group != swingFx?.Group)
+        {
+            Fill(look, picks, ClipId.Skill2Fx, s2fx.Group, makeFrame, "effect name says '{0}' 2");
+        }
+
+        if (skill3Fx is { } s3fx && s3fx.Group != swingFx?.Group)
+        {
+            Fill(look, picks, ClipId.Skill3Fx, s3fx.Group, makeFrame, "effect name says '{0}' 3");
+        }
+
+        if (egoFx is { } efx && efx.Group != swingFx?.Group)
+        {
+            Fill(look, picks, ClipId.EgoFx, efx.Group, makeFrame, "effect name says 'ego'");
+        }
 
         bool usedShapes = false;
         if (look.Frames(ClipId.Idle).Count == 0 || look.Frames(ClipId.Punch).Count == 0)
@@ -287,7 +321,7 @@ public static class AutoLook
             return (Role.Excluded, excluded.Score, excluded.Word);
         }
 
-        Role[] order = { Role.Hit, Role.Down, Role.Evade, Role.Guard, Role.Jump, Role.Attack, Role.Walk, Role.Idle };
+        Role[] order = { Role.Ego, Role.Hit, Role.Down, Role.Evade, Role.Guard, Role.Jump, Role.Attack, Role.Walk, Role.Idle };
         KeyValuePair<Role, (int Score, string Word)> best = scores
             .OrderByDescending(kv => kv.Value.Score)
             .ThenBy(kv => Array.IndexOf(order, kv.Key))
@@ -525,6 +559,11 @@ public static class AutoLook
         }
 
         string clips = string.Join(", ", new[] { ClipId.Idle, ClipId.Walk, ClipId.Jump, ClipId.Punch, ClipId.Hit }.Select(Count));
+        int extras = new[] { ClipId.Skill2, ClipId.Skill3, ClipId.Guard, ClipId.Evade, ClipId.Ego }.Count(c => look.Frames(c).Count > 0);
+        if (extras > 0)
+        {
+            clips += $", +{extras} skill/defense/E.G.O clip{(extras == 1 ? string.Empty : "s")}";
+        }
         int swing = look.Frames(ClipId.SwingFx).Count;
         int hit = look.Frames(ClipId.HitFx).Count;
         string fx = swing + hit == 0 ? "; no effects found" : $"; effects: swing {(swing == 0 ? "-" : swing)}, hit {(hit == 0 ? "-" : hit)}";

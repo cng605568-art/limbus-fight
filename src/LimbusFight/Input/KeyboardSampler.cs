@@ -21,6 +21,10 @@ public sealed class KeyboardSampler
         (KeyboardKey.D, InputButtons.Right),
         (KeyboardKey.W, InputButtons.Up),
         (KeyboardKey.J, InputButtons.Punch),
+        (KeyboardKey.K, InputButtons.Skill2),
+        (KeyboardKey.L, InputButtons.Skill3),
+        (KeyboardKey.S, InputButtons.Defend),
+        (KeyboardKey.I, InputButtons.Ego),
     };
 
     private readonly HashSet<KeyboardKey> _pressedThisFrame = new();

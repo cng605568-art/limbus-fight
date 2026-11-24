@@ -56,6 +56,10 @@ public enum CombatEventKind
     Ko,
     TimeOver,
     RoundStart,
+    Ego,
+    Counter,
+    Guard,
+    Charge,
 }
 
 public sealed record CombatEvent(long Frame, CombatEventKind Kind, float X, float Y, string Text, bool FromPlayer1);
@@ -95,6 +99,11 @@ public static class CombatRules
     public const float ClashPushback = 9f;
 
     public const int SinCap = 10;
+
+    /// <summary>A counter that lands knocks the attacker back for this long.</summary>
+    public const int CounterRecoil = 24;
+
+    public const int SanityOnCounter = 5;
     public const int StatusCap = 99;
 
     /// <summary>Burn deals its potency once per second.</summary>

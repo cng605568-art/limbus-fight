@@ -79,6 +79,7 @@ internal static class Program
         var looks = new LookManager(steam);
         var browser = new AssetBrowserScreen { Looks = looks, Roster = roster };
         var editor = new LookEditorScreen(looks, roster.Stats);
+        browser.SelectedClip = () => (editor.SelectedSlot, editor.SelectedClip);
         var boxEditor = new BoxEditorScreen(roster, looks);
 
         // A slot's fighter (or its numbers) changed: give the arena its stats and the look manager its look.
@@ -161,7 +162,12 @@ internal static class Program
 
             if (inArena && keyboard.WasPressed(KeyboardKey.F6))
             {
-                arena.DummyMode = arena.DummyMode == DummyMode.Stand ? DummyMode.Fight : DummyMode.Stand;
+                arena.DummyMode = arena.DummyMode switch
+                {
+                    DummyMode.Stand => DummyMode.Fight,
+                    DummyMode.Fight => DummyMode.Defend,
+                    _ => DummyMode.Stand,
+                };
             }
 
             looks.Update();
@@ -235,7 +241,7 @@ internal static class Program
 
                 DrawLookStatus(looks, arena);
                 Ui.TextCentered(
-                    "A/D move  W jump  J punch  R restart round  F1 boxes  F2 fighter  F3 assets  F4 looks  F6 dummy  ESC quit",
+                    "A/D move  W jump  J K L skills  S defend  I E.G.O  R restart  F1 boxes  F2 fighter  F3 assets  F4 looks  F6 dummy",
                     VirtualWidth / 2, VirtualHeight - 34, 20, Theme.TextDim);
             }
 
@@ -264,7 +270,12 @@ internal static class Program
     private static void DrawLookStatus(LookManager looks, TestArena arena)
     {
         const int y = 652;
-        string dummyMode = arena.DummyMode == DummyMode.Stand ? "Dummy: stands still (F6: fight back)" : "Dummy: fights back (F6: stand still)";
+        string dummyMode = arena.DummyMode switch
+        {
+            DummyMode.Stand => "Dummy: stands still (F6: fight back)",
+            DummyMode.Fight => "Dummy: fights back (F6: defend)",
+            _ => "Dummy: defends (F6: stand still)",
+        };
         Ui.Text(dummyMode, 20, y, 18, arena.DummyMode == DummyMode.Stand ? Theme.TextDim : Theme.Warn);
         string? p1 = looks.Status(LookSlot.Player1);
         string? dummy = looks.Status(LookSlot.Dummy);

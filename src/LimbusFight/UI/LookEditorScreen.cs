@@ -32,7 +32,15 @@ public sealed class LookEditorScreen
     private const int PreviewW = 636;
     private const int PreviewFloorY = 470;
 
-    private static readonly ClipId[] AllClips = { ClipId.Idle, ClipId.Walk, ClipId.Jump, ClipId.Punch, ClipId.Hit, ClipId.SwingFx, ClipId.HitFx };
+    private static readonly ClipId[] AllClips =
+    {
+        ClipId.Idle, ClipId.Walk, ClipId.Jump, ClipId.Punch, ClipId.Skill2, ClipId.Skill3, ClipId.Ego, ClipId.Guard, ClipId.Evade, ClipId.Hit,
+        ClipId.SwingFx, ClipId.Skill2Fx, ClipId.Skill3Fx, ClipId.EgoFx, ClipId.HitFx,
+    };
+
+    private const int VisibleClipRows = (PanelBottom - ClipRowTop) / ClipRowH;
+
+    private int _clipScroll;
 
     private readonly LookManager _looks;
     private LookSlot _slot = LookSlot.Player1;
@@ -53,6 +61,12 @@ public sealed class LookEditorScreen
     }
 
     private ClipId Clip => AllClips[_clipIndex];
+
+    /// <summary>The fighter shown (P1 / Dummy); F3's Ctrl+Q adds pictures to this slot.</summary>
+    public LookSlot SelectedSlot => _slot;
+
+    /// <summary>The clip selected here; F3's Ctrl+Q adds pictures to it.</summary>
+    public ClipId SelectedClip => Clip;
 
     private LookData Look => _looks.Get(_slot);
 
@@ -85,6 +99,7 @@ public sealed class LookEditorScreen
         }
 
         HandleEdits(keys, shift);
+        _clipScroll = Math.Clamp(_clipScroll, Math.Max(0, _clipIndex - VisibleClipRows + 1), _clipIndex);
         _frameIndex = Math.Clamp(_frameIndex, 0, Math.Max(0, Frames.Count - 1));
         _thumbScroll = Math.Clamp(_thumbScroll, Math.Max(0, _frameIndex - ThumbsVisible + 1), _frameIndex);
     }
@@ -307,7 +322,8 @@ public sealed class LookEditorScreen
                 "   Ctrl+4 punch, Ctrl+5 hit, Ctrl+6 / 7 effects" + (_slot == LookSlot.Dummy ? " (+Shift)." : "."),
                 string.Empty,
                 "Or press Ctrl+A in step 3 to fill every clip",
-                "automatically from that file.",
+                "automatically, or Ctrl+Q to add to the clip",
+                "selected here.",
                 "Punch: 1st = wind-up, 2nd = hit, rest = recovery.",
             })
             {
@@ -318,11 +334,11 @@ public sealed class LookEditorScreen
             return;
         }
 
-        for (int c = 0; c < AllClips.Length; c++)
+        for (int c = _clipScroll; c < AllClips.Length && c < _clipScroll + VisibleClipRows; c++)
         {
             ClipId clip = AllClips[c];
             List<LookFrame> frames = Look.Frames(clip);
-            int top = ClipRowTop + (c * ClipRowH);
+            int top = ClipRowTop + ((c - _clipScroll) * ClipRowH);
             bool selected = c == _clipIndex;
 
             if (selected)
@@ -341,7 +357,7 @@ public sealed class LookEditorScreen
                 int x = ClipsX + 12 + (i * (Thumb + ThumbGap));
                 int y = top + 23;
                 DrawThumb(frames[index], x, y, selected && index == _frameIndex);
-                string hold = clip is ClipId.Punch or ClipId.Jump ? $"#{index + 1}" : $"{frames[index].Hold}f";
+                string hold = LookData.IsMove(clip) || clip == ClipId.Jump ? $"#{index + 1}" : $"{frames[index].Hold}f";
                 Ui.Text(hold, x + Thumb + 3, y + Thumb - 16, 16, Theme.TextDim);
             }
 
@@ -352,6 +368,10 @@ public sealed class LookEditorScreen
                     ClipId.Idle => "empty: other clips fall back to idle",
                     ClipId.SwingFx => "empty: no swing effect",
                     ClipId.HitFx => "empty: the yellow spark is shown",
+                    ClipId.Skill2 or ClipId.Skill3 => "empty: uses Skill 1's poses",
+                    ClipId.Ego => "empty: uses Skill 3, then Skill 1",
+                    ClipId.Skill2Fx or ClipId.Skill3Fx or ClipId.EgoFx => "empty: uses Skill 1's effect",
+                    ClipId.Evade => "empty: uses jump, then walk",
                     _ => "empty: uses idle",
                 };
                 Ui.Text(empty, ClipsX + 12, top + 33, Font, Theme.TextDim);
@@ -369,17 +389,46 @@ public sealed class LookEditorScreen
         ClipId.Walk => "loops while walking",
         ClipId.Jump => "crouch, rise, fall",
         ClipId.Punch => "wind-up, hit, recovery",
-        ClipId.Hit => "plays once when hit",
-        ClipId.SwingFx => "on the hitbox with the punch",
+        ClipId.Hit => "hit, Staggered, K.O.",
+        ClipId.SwingFx => "on Skill 1's hitbox",
+        ClipId.Skill2Fx => "on Skill 2's hitbox",
+        ClipId.Skill3Fx => "on Skill 3's hitbox, per coin",
+        ClipId.EgoFx => "on the E.G.O hitbox, per coin",
+        ClipId.Skill2 or ClipId.Skill3 or ClipId.Ego => "wind-up, hit, recovery",
+        ClipId.Guard => "guard, blockstun, counter",
+        ClipId.Evade => "plays once per evade",
         _ => "where the hit lands",
     };
 
     private static string ClipTitle(ClipId clip) => clip switch
     {
-        ClipId.SwingFx => "SWING FX",
+        ClipId.Punch => "SKILL 1 (J)",
+        ClipId.Skill2 => "SKILL 2 (K)",
+        ClipId.Skill3 => "SKILL 3 (L)",
+        ClipId.Ego => "E.G.O (I)",
+        ClipId.Guard => "DEFENSE (S)",
+        ClipId.Evade => "EVADE",
+        ClipId.SwingFx => "SKILL 1 FX",
+        ClipId.Skill2Fx => "SKILL 2 FX",
+        ClipId.Skill3Fx => "SKILL 3 FX",
+        ClipId.EgoFx => "E.G.O FX",
         ClipId.HitFx => "HIT FX",
         _ => LookData.ClipKey(clip).ToUpperInvariant(),
     };
+
+    /// <summary>The move whose timing / hitbox a clip follows.</summary>
+    private AttackData MoveFor(ClipId clip)
+    {
+        FighterStats stats = _stats(_slot);
+        AttackData? move = clip switch
+        {
+            ClipId.Skill2 or ClipId.Skill2Fx => stats.Skill2,
+            ClipId.Skill3 or ClipId.Skill3Fx => stats.Skill3,
+            ClipId.Ego or ClipId.EgoFx => stats.Ego,
+            _ => stats.Punch,
+        };
+        return move ?? stats.Punch;
+    }
 
     private void DrawThumb(LookFrame frame, int x, int y, bool selected)
     {
@@ -492,7 +541,7 @@ public sealed class LookEditorScreen
             return false;
         }
 
-        AttackData punch = _stats(_slot).Punch;
+        AttackData punch = MoveFor(Clip);
         float x = feetX + punch.HitboxOffsetX + (punch.HitboxWidth / 2f);
         float y = feetY + punch.HitboxOffsetY + (punch.HitboxHeight / 2f);
         if (Clip == ClipId.HitFx)
@@ -527,9 +576,9 @@ public sealed class LookEditorScreen
         int t = (int)(_previewTick % 100000);
         switch (Clip)
         {
-            case ClipId.Punch:
+            case ClipId.Punch or ClipId.Skill2 or ClipId.Skill3 or ClipId.Ego:
             {
-                AttackData punch = _stats(_slot).Punch;
+                AttackData punch = MoveFor(Clip);
                 int stateFrame = (t % (punch.TotalFrames + 24)) + 1;
                 return stateFrame > punch.TotalFrames ? 0 : ClipPicker.PunchFrame(frames.Count, punch, stateFrame);
             }

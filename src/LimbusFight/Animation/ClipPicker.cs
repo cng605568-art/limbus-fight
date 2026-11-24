@@ -11,12 +11,14 @@ public static class ClipPicker
     /// <summary>Returns the clip and frame index to draw, or null if the look has nothing usable.</summary>
     public static (ClipId Clip, int Frame)? Pick(Fighter fighter, LookData look)
     {
-        ClipId wanted = Wanted(fighter.State);
-        List<LookFrame> frames = look.Frames(wanted);
-
-        if (frames.Count > 0)
+        // A skill / E.G.O / defense clip that is empty falls back to the nearest one that has frames.
+        foreach (ClipId wanted in Chain(fighter))
         {
-            return (wanted, FrameFor(wanted, frames, fighter));
+            List<LookFrame> frames = look.Frames(wanted);
+            if (frames.Count > 0)
+            {
+                return (wanted, FrameFor(wanted, frames, fighter));
+            }
         }
 
         // Fall back to idle (looping), then to any clip that has frames.
@@ -38,12 +40,47 @@ public static class ClipPicker
         FighterState.Attack => ClipId.Punch,
         FighterState.JumpSquat or FighterState.Airborne => ClipId.Jump,
         FighterState.WalkForward or FighterState.WalkBackward => ClipId.Walk,
+        FighterState.Guard or FighterState.Blockstun or FighterState.Counter => ClipId.Guard,
+        FighterState.Evade => ClipId.Evade,
         _ => ClipId.Idle,
     };
 
+    /// <summary>The clip a fighter wants now, then its stand-ins (a skill without poses uses Skill 1's).</summary>
+    public static IEnumerable<ClipId> Chain(Fighter fighter)
+    {
+        if (fighter.State == FighterState.Attack && fighter.CurrentAttack is { } attack)
+        {
+            switch (attack.Slot)
+            {
+                case MoveSlot.Ego:
+                    yield return ClipId.Ego;
+                    yield return ClipId.Skill3;
+                    break;
+                case MoveSlot.Skill3:
+                    yield return ClipId.Skill3;
+                    break;
+                case MoveSlot.Skill2:
+                    yield return ClipId.Skill2;
+                    break;
+            }
+
+            yield return ClipId.Punch;
+            yield break;
+        }
+
+        ClipId wanted = Wanted(fighter.State);
+        yield return wanted;
+        if (wanted == ClipId.Evade)
+        {
+            yield return ClipId.Jump;
+            yield return ClipId.Walk;
+        }
+    }
+
     private static int FrameFor(ClipId clip, List<LookFrame> frames, Fighter fighter) => clip switch
     {
-        ClipId.Punch when fighter.CurrentAttack is AttackData attack => PunchFrame(frames.Count, attack, fighter.StateFrame),
+        _ when LookData.IsMove(clip) && fighter.CurrentAttack is AttackData attack => PunchFrame(frames.Count, attack, fighter.StateFrame),
+        ClipId.Evade => Clamped(frames, fighter.StateFrame),
         ClipId.Jump => JumpFrame(frames.Count, fighter.State, fighter.VelocityY),
         ClipId.Hit => Clamped(frames, fighter.StateFrame),
         _ => Looping(frames, fighter.StateFrame),

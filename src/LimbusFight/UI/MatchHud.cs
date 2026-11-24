@@ -11,7 +11,7 @@ namespace LimbusFight.UI;
 public static class MatchHud
 {
     /// <summary>First stage pixel row below the HUD.</summary>
-    public const int Bottom = 128;
+    public const int Bottom = 132;
 
     private const int Top = SteamStatusPanel.CompactHeight;
     private const int BarW = 500;
@@ -60,6 +60,10 @@ public static class MatchHud
                 CombatEventKind.Stagger => (30, new Color((byte)255, (byte)210, (byte)70, (byte)255)),
                 CombatEventKind.Panic => (28, new Color((byte)170, (byte)110, (byte)255, (byte)255)),
                 CombatEventKind.Crit => (24, new Color((byte)255, (byte)240, (byte)160, (byte)255)),
+                CombatEventKind.Ego => (34, new Color((byte)255, (byte)90, (byte)70, (byte)255)),
+                CombatEventKind.Counter => (32, new Color((byte)120, (byte)230, (byte)255, (byte)255)),
+                CombatEventKind.Guard => (20, new Color((byte)150, (byte)190, (byte)255, (byte)255)),
+                CombatEventKind.Charge => (20, new Color((byte)120, (byte)200, (byte)255, (byte)255)),
                 CombatEventKind.StatusDamage => (20, new Color((byte)255, (byte)150, (byte)90, (byte)255)),
                 _ when e.Text.Contains("Fatal", StringComparison.Ordinal) || e.Text.Contains("Weak", StringComparison.Ordinal) => (28, Theme.Bad),
                 _ when e.Text.Contains("Ineffective", StringComparison.Ordinal) || e.Text.Contains("Endured", StringComparison.Ordinal) => (22, Theme.TextDim),
@@ -166,6 +170,25 @@ public static class MatchHud
             }
         }
 
+        // E.G.O readiness, defense and passive (Step 6).
+        string ego = stats.Ego is not { } egoMove ? string.Empty
+            : f.CanUseEgo ? "E.G.O READY (I)"
+            : f.IsPanicking ? "E.G.O: Panic"
+            : "E.G.O " + string.Join(" ", egoMove.SinCost.Select(c => $"{Math.Min(f.Sins[(int)c.Sin], c.Amount)}/{c.Amount} {c.Sin}"));
+        string kit = $"{stats.Defense.Kind}" + (stats.Passive.Kind == PassiveKind.None ? string.Empty : $"  ·  {stats.Passive.Describe()}");
+        int kitY = Top + 82;
+        Color egoColor = f.CanUseEgo ? Theme.Accent : Theme.TextDim;
+        if (mirrored)
+        {
+            Ui.Text(ego, x, kitY, 18, egoColor);
+            Ui.TextRight(Ui.FitEnd(kit, 18, BarW - Ui.Measure(ego, 18) - 20), x + BarW, kitY, 18, Theme.TextDim);
+        }
+        else
+        {
+            Ui.TextRight(ego, x + BarW, kitY, 18, egoColor);
+            Ui.Text(Ui.FitEnd(kit, 18, BarW - Ui.Measure(ego, 18) - 20), x, kitY, 18, Theme.TextDim);
+        }
+
         // Statuses: "Burn 3x2" etc.
         var parts = new List<string>();
         for (int i = 0; i < f.Statuses.Length; i++)
@@ -179,7 +202,7 @@ public static class MatchHud
         if (parts.Count > 0)
         {
             string statuses = string.Join("  ", parts);
-            int sy = spY + 18;
+            int sy = Top + 102;
             if (mirrored)
             {
                 Ui.TextRight(Ui.FitEnd(statuses, 18, BarW), x + BarW, sy, 18, new Color((byte)255, (byte)170, (byte)110, (byte)255));

@@ -44,9 +44,9 @@ public sealed class BoxEditorScreen
         new("COMBAT", label, "x", 0.25f, 0.5f, false, get, set, _ => 1f) { Format = v => $"{v:0.##} {CombatRules.ResistLabel(v)}" };
 
     /// <summary>A status slot (the first entry of a move's on-hit list): kind, potency, count.</summary>
-    private static Field[] StatusFields(string label, Func<FighterData, List<StatusData>> list) => new[]
+    private Field[] StatusFields(string label, Func<FighterData, List<StatusData>> list) => new[]
     {
-        new Field("PUNCH (J)", label, string.Empty, 1, 1, true,
+        new Field("MOVE", label, string.Empty, 1, 1, true,
             d => list(d).Count == 0 ? 0 : (int)list(d)[0].Status + 1,
             (d, v) =>
             {
@@ -67,11 +67,11 @@ public sealed class BoxEditorScreen
             },
             _ => 0)
         { Format = v => StatusChoices[(int)v], Choices = StatusChoices.Length },
-        new Field("PUNCH (J)", "   potency", string.Empty, 1, 5, true,
+        new Field("MOVE", "   potency", string.Empty, 1, 5, true,
             d => list(d).Count == 0 ? 0 : list(d)[0].Potency,
             (d, v) => { if (list(d).Count > 0) { list(d)[0].Potency = Math.Max(1, (int)v); } },
             d => list(d).Count == 0 ? 0 : 2),
-        new Field("PUNCH (J)", "   count", string.Empty, 1, 5, true,
+        new Field("MOVE", "   count", string.Empty, 1, 5, true,
             d => list(d).Count == 0 ? 0 : list(d)[0].Count,
             (d, v) => { if (list(d).Count > 0) { list(d)[0].Count = Math.Max(1, (int)v); } },
             d => list(d).Count == 0 ? 0 : 3),
@@ -79,7 +79,35 @@ public sealed class BoxEditorScreen
 
     private static readonly FighterData Defaults = new();
 
-    private static readonly Field[] Fields =
+
+    private readonly Field[] _fields;
+    private string _moveButton = "punch";
+
+    private MoveData M(FighterData d) => d.Move(_moveButton);
+
+    private MoveData DefaultMove => MoveData.Default(_moveButton);
+
+    private static readonly string[] MoveTitles = { "SKILL 1 (J)", "SKILL 2 (K)", "SKILL 3 (L)", "E.G.O (I)" };
+
+    private string MoveTitle => MoveTitles[Array.IndexOf(MoveData.Buttons, _moveButton)];
+
+    private static void SetEgoSin(MoveData move, int choice)
+    {
+        if (choice == 0)
+        {
+            move.SinCost.Clear();
+        }
+        else if (move.SinCost.Count == 0)
+        {
+            move.SinCost.Add(new SinCostData { Sin = (Sin)(choice - 1), Amount = 3 });
+        }
+        else
+        {
+            move.SinCost[0].Sin = (Sin)(choice - 1);
+        }
+    }
+
+    private Field[] BuildFields() =>
     [
         new("BODY", "Hurtbox width", "px", 2, 10, true, d => d.Body.HurtboxWidth, (d, v) => d.Body.HurtboxWidth = v, _ => Defaults.Body.HurtboxWidth),
         new("BODY", "Hurtbox height", "px", 2, 10, true, d => d.Body.HurtboxHeight, (d, v) => d.Body.HurtboxHeight = v, _ => Defaults.Body.HurtboxHeight),
@@ -100,26 +128,52 @@ public sealed class BoxEditorScreen
         Resist("Pierce resist", d => d.Combat.PierceResist, (d, v) => d.Combat.PierceResist = v),
         Resist("Blunt resist", d => d.Combat.BluntResist, (d, v) => d.Combat.BluntResist = v),
 
-        new("PUNCH (J)", "Damage", string.Empty, 1, 5, true, d => d.Punch.Damage, (d, v) => d.Punch.Damage = (int)v, _ => Defaults.Punch.Damage),
-        new("PUNCH (J)", "Stagger damage", string.Empty, 1, 5, true, d => d.Punch.StaggerDamage, (d, v) => d.Punch.StaggerDamage = (int)v, _ => Defaults.Punch.StaggerDamage),
-        new("PUNCH (J)", "Clash power", string.Empty, 1, 5, false, d => d.Punch.ClashPower, (d, v) => d.Punch.ClashPower = v, _ => Defaults.Punch.ClashPower),
-        new("PUNCH (J)", "Damage type", string.Empty, 1, 1, true, d => (int)d.Punch.DamageType, (d, v) => d.Punch.DamageType = (DamageType)(((int)v % 3 + 3) % 3), _ => (int)Defaults.Punch.DamageType)
+        new("DEFENSE (S)", "Defense", string.Empty, 1, 1, true, d => (int)d.Defense.Kind, (d, v) => d.Defense.Kind = (DefenseKind)(((int)v % 3 + 3) % 3), _ => 0)
+        { Format = v => ((DefenseKind)(int)v) switch { DefenseKind.Guard => "Guard (hold)", DefenseKind.Evade => "Evade (press)", _ => "Counter (press)" }, Choices = 3 },
+        new("DEFENSE (S)", "Guard: damage taken", "%", 5, 25, true, d => d.Defense.GuardDamage * 100f, (d, v) => d.Defense.GuardDamage = v / 100f, _ => Defaults.Defense.GuardDamage * 100f),
+        new("DEFENSE (S)", "Guard: stagger taken", "%", 5, 25, true, d => d.Defense.GuardStagger * 100f, (d, v) => d.Defense.GuardStagger = v / 100f, _ => Defaults.Defense.GuardStagger * 100f),
+        new("DEFENSE (S)", "Evade/counter length", "frames", 1, 5, true, d => d.Defense.TotalFrames, (d, v) => d.Defense.TotalFrames = (int)v, _ => Defaults.Defense.TotalFrames),
+        new("DEFENSE (S)", "Window from frame", string.Empty, 1, 5, true, d => d.Defense.WindowStart, (d, v) => d.Defense.WindowStart = (int)v, _ => Defaults.Defense.WindowStart),
+        new("DEFENSE (S)", "Window to frame", string.Empty, 1, 5, true, d => d.Defense.WindowEnd, (d, v) => d.Defense.WindowEnd = (int)v, _ => Defaults.Defense.WindowEnd),
+        new("DEFENSE (S)", "Evade speed", "px/f", 0.5f, 2, false, d => d.Defense.EvadeSpeed, (d, v) => d.Defense.EvadeSpeed = v, _ => Defaults.Defense.EvadeSpeed),
+
+        new("PASSIVE", "Passive", string.Empty, 1, 1, true, d => (int)d.Passive.Kind, (d, v) => d.Passive.Kind = (PassiveKind)(((int)v % 6 + 6) % 6), _ => 0)
+        { Format = v => ((PassiveKind)(int)v).ToString(), Choices = 6 },
+        new("PASSIVE", "Passive value", string.Empty, 1, 5, true, d => d.Passive.Value, (d, v) => d.Passive.Value = (int)v, _ => 0),
+        new("PASSIVE", "Passive status", string.Empty, 1, 1, true, d => (int)d.Passive.Status, (d, v) => d.Passive.Status = (StatusKind)(((int)v % 7 + 7) % 7), _ => 0)
+        { Format = v => ((StatusKind)(int)v).ToString(), Choices = 7 },
+
+        new("MOVE", "Move is on", string.Empty, 1, 1, true, d => M(d).Enabled ? 1 : 0, (d, v) => M(d).Enabled = _moveButton == "punch" || ((int)v % 2 + 2) % 2 == 1, _ => 1)
+        { Format = v => v >= 1 ? "yes" : "no (button does nothing)", Choices = 2 },
+        new("MOVE", "Coins (hits)", string.Empty, 1, 1, true, d => M(d).Coins, (d, v) => M(d).Coins = (int)v, _ => DefaultMove.Coins),
+        new("MOVE", "Frames between coins", "frames", 1, 2, true, d => M(d).CoinInterval, (d, v) => M(d).CoinInterval = (int)v, _ => DefaultMove.CoinInterval),
+        new("MOVE", "Damage", string.Empty, 1, 5, true, d => M(d).Damage, (d, v) => M(d).Damage = (int)v, _ => DefaultMove.Damage),
+        new("MOVE", "Stagger damage", string.Empty, 1, 5, true, d => M(d).StaggerDamage, (d, v) => M(d).StaggerDamage = (int)v, _ => DefaultMove.StaggerDamage),
+        new("MOVE", "Clash power", string.Empty, 1, 5, false, d => M(d).ClashPower, (d, v) => M(d).ClashPower = v, _ => DefaultMove.ClashPower),
+        new("MOVE", "Damage type", string.Empty, 1, 1, true, d => (int)M(d).DamageType, (d, v) => M(d).DamageType = (DamageType)(((int)v % 3 + 3) % 3), _ => (int)DefaultMove.DamageType)
         { Format = v => ((DamageType)(int)v).ToString(), Choices = 3 },
-        new("PUNCH (J)", "Sin", string.Empty, 1, 1, true, d => (int)d.Punch.Sin, (d, v) => d.Punch.Sin = (Sin)(((int)v % 7 + 7) % 7), _ => (int)Defaults.Punch.Sin)
+        new("MOVE", "Sin", string.Empty, 1, 1, true, d => (int)M(d).Sin, (d, v) => M(d).Sin = (Sin)(((int)v % 7 + 7) % 7), _ => (int)DefaultMove.Sin)
         { Format = v => ((Sin)(int)v).ToString(), Choices = 7 },
-        .. StatusFields("On hit, opponent gets", d => d.Punch.OnHit),
-        .. StatusFields("On hit, puncher gains", d => d.Punch.SelfOnHit),
-        new("PUNCH (J)", "Startup", "frames", 1, 5, true, d => d.Punch.Startup, (d, v) => d.Punch.Startup = (int)v, _ => Defaults.Punch.Startup),
-        new("PUNCH (J)", "Active", "frames", 1, 5, true, d => d.Punch.Active, (d, v) => d.Punch.Active = (int)v, _ => Defaults.Punch.Active),
-        new("PUNCH (J)", "Recovery", "frames", 1, 5, true, d => d.Punch.Recovery, (d, v) => d.Punch.Recovery = (int)v, _ => Defaults.Punch.Recovery),
-        new("PUNCH (J)", "Hitstun", "frames", 1, 5, true, d => d.Punch.Hitstun, (d, v) => d.Punch.Hitstun = (int)v, _ => Defaults.Punch.Hitstun),
-        new("PUNCH (J)", "Hitstop", "frames", 1, 5, true, d => d.Punch.Hitstop, (d, v) => d.Punch.Hitstop = (int)v, _ => Defaults.Punch.Hitstop),
-        new("PUNCH (J)", "Pushback", "px/f", 0.5f, 2, false, d => d.Punch.Pushback, (d, v) => d.Punch.Pushback = v, _ => Defaults.Punch.Pushback),
-        new("PUNCH (J)", "Hitbox forward", "px", 2, 10, true, d => d.Punch.Hitbox.X, (d, v) => d.Punch.Hitbox.X = v, _ => Defaults.Punch.Hitbox.X),
-        new("PUNCH (J)", "Hitbox top above feet", "px", 2, 10, true, d => -d.Punch.Hitbox.Y, (d, v) => d.Punch.Hitbox.Y = -v, _ => -Defaults.Punch.Hitbox.Y),
-        new("PUNCH (J)", "Hitbox width", "px", 2, 10, true, d => d.Punch.Hitbox.Width, (d, v) => d.Punch.Hitbox.Width = v, _ => Defaults.Punch.Hitbox.Width),
-        new("PUNCH (J)", "Hitbox height", "px", 2, 10, true, d => d.Punch.Hitbox.Height, (d, v) => d.Punch.Hitbox.Height = v, _ => Defaults.Punch.Hitbox.Height),
-        new("PUNCH (J)", "Arm hurtbox width", "px", 2, 10, true, d => d.Punch.ArmHurtboxWidth, (d, v) => d.Punch.ArmHurtboxWidth = v, _ => Defaults.Punch.ArmHurtboxWidth),
+        new("MOVE", "E.G.O cost: Sin", string.Empty, 1, 1, true, d => M(d).SinCost.Count == 0 ? 0 : (int)M(d).SinCost[0].Sin + 1,
+            (d, v) => SetEgoSin(M(d), (((int)v % 8) + 8) % 8), _ => DefaultMove.SinCost.Count == 0 ? 0 : (int)DefaultMove.SinCost[0].Sin + 1)
+        { Format = v => (int)v == 0 ? "free" : ((Sin)((int)v - 1)).ToString(), Choices = 8 },
+        new("MOVE", "E.G.O cost: amount", string.Empty, 1, 2, true, d => M(d).SinCost.Count == 0 ? 0 : M(d).SinCost[0].Amount,
+            (d, v) => { if (M(d).SinCost.Count > 0) { M(d).SinCost[0].Amount = Math.Max(1, (int)v); } }, _ => DefaultMove.SinCost.Count == 0 ? 0 : DefaultMove.SinCost[0].Amount),
+        new("MOVE", "Charge spent", string.Empty, 1, 5, true, d => M(d).ChargeCost, (d, v) => M(d).ChargeCost = (int)v, _ => 0),
+        new("MOVE", "Damage per Charge use", string.Empty, 1, 5, true, d => M(d).ChargeBonusDamage, (d, v) => M(d).ChargeBonusDamage = (int)v, _ => 0),
+        .. StatusFields("On hit, opponent gets", d => M(d).OnHit),
+        .. StatusFields("On hit, puncher gains", d => M(d).SelfOnHit),
+        new("MOVE", "Startup", "frames", 1, 5, true, d => M(d).Startup, (d, v) => M(d).Startup = (int)v, _ => DefaultMove.Startup),
+        new("MOVE", "Active", "frames", 1, 5, true, d => M(d).Active, (d, v) => M(d).Active = (int)v, _ => DefaultMove.Active),
+        new("MOVE", "Recovery", "frames", 1, 5, true, d => M(d).Recovery, (d, v) => M(d).Recovery = (int)v, _ => DefaultMove.Recovery),
+        new("MOVE", "Hitstun", "frames", 1, 5, true, d => M(d).Hitstun, (d, v) => M(d).Hitstun = (int)v, _ => DefaultMove.Hitstun),
+        new("MOVE", "Hitstop", "frames", 1, 5, true, d => M(d).Hitstop, (d, v) => M(d).Hitstop = (int)v, _ => DefaultMove.Hitstop),
+        new("MOVE", "Pushback", "px/f", 0.5f, 2, false, d => M(d).Pushback, (d, v) => M(d).Pushback = v, _ => DefaultMove.Pushback),
+        new("MOVE", "Hitbox forward", "px", 2, 10, true, d => M(d).Hitbox.X, (d, v) => M(d).Hitbox.X = v, _ => DefaultMove.Hitbox.X),
+        new("MOVE", "Hitbox top above feet", "px", 2, 10, true, d => -M(d).Hitbox.Y, (d, v) => M(d).Hitbox.Y = -v, _ => -DefaultMove.Hitbox.Y),
+        new("MOVE", "Hitbox width", "px", 2, 10, true, d => M(d).Hitbox.Width, (d, v) => M(d).Hitbox.Width = v, _ => DefaultMove.Hitbox.Width),
+        new("MOVE", "Hitbox height", "px", 2, 10, true, d => M(d).Hitbox.Height, (d, v) => M(d).Hitbox.Height = v, _ => DefaultMove.Hitbox.Height),
+        new("MOVE", "Arm hurtbox width", "px", 2, 10, true, d => M(d).ArmHurtboxWidth, (d, v) => M(d).ArmHurtboxWidth = v, _ => DefaultMove.ArmHurtboxWidth),
     ];
 
     private readonly RosterManager _roster;
@@ -140,12 +194,13 @@ public sealed class BoxEditorScreen
     {
         _roster = roster;
         _looks = looks;
+        _fields = BuildFields();
     }
 
     private FighterData Fighter => _roster.Get(_slot);
 
     /// <summary>Rows: 0 = the fighter's name, 1.. = fields.</summary>
-    private int RowCount => Fields.Length + 1;
+    private int RowCount => _fields.Length + 1;
 
     public void Update(KeyboardSampler keys)
     {
@@ -168,6 +223,13 @@ public sealed class BoxEditorScreen
         {
             _roster.Cycle(_slot, keys.WasPressed(KeyboardKey.RightBracket) ? 1 : -1);
             SetStatus($"{SlotName} is now {Fighter.Name} ({_roster.IdOf(_slot)}.json).", Theme.Good);
+        }
+
+        if (keys.WasPressed(KeyboardKey.Q) || keys.WasPressed(KeyboardKey.E))
+        {
+            int i = Array.IndexOf(MoveData.Buttons, _moveButton) + (keys.WasPressed(KeyboardKey.E) ? 1 : -1);
+            _moveButton = MoveData.Buttons[(i + MoveData.Buttons.Length) % MoveData.Buttons.Length];
+            _frame = 0;
         }
 
         if (ctrl && keys.WasPressed(KeyboardKey.N))
@@ -198,7 +260,7 @@ public sealed class BoxEditorScreen
 
         if (_row > 0)
         {
-            Field field = Fields[_row - 1];
+            Field field = _fields[_row - 1];
             int dir = (Repeat(KeyboardKey.Right) ? 1 : 0) - (Repeat(KeyboardKey.Left) ? 1 : 0);
             if (dir != 0)
             {
@@ -217,7 +279,8 @@ public sealed class BoxEditorScreen
         }
 
         // Frame scrubber: 0 = standing, 1.. = the punch's frames.
-        int total = Fighter.Punch.Startup + Fighter.Punch.Active + Fighter.Punch.Recovery;
+        MoveData shown = M(Fighter);
+        int total = shown.Startup + shown.Active + shown.Recovery;
         if (keys.WasPressed(KeyboardKey.Space))
         {
             _playing = !_playing;
@@ -258,7 +321,7 @@ public sealed class BoxEditorScreen
         DrawFields();
         DrawPreview();
 
-        Ui.TextCentered("Tab  P1 / Dummy    [ ]  switch fighter    Ctrl+N  new fighter    Up/Down  pick    Left/Right  change (Shift x5-10)",
+        Ui.TextCentered("Tab  P1/Dummy   [ ]  fighter   Q/E  move   Ctrl+N  new fighter   Up/Down  pick   Left/Right  change (Shift: more)",
             width / 2, height - 56, Font, Theme.TextDim);
         Ui.TextCentered("Del  reset value    Enter on the name  rename    Space  play / pause    ,  .  step frames    F4  looks    F2  back",
             width / 2, height - 30, Font, Theme.TextDim);
@@ -363,7 +426,7 @@ public sealed class BoxEditorScreen
 
         string? lastSection = null;
         int y = ListTop;
-        for (int i = 0; i < Fields.Length; i++)
+        for (int i = 0; i < _fields.Length; i++)
         {
             int row = i + 1;
             if (row < _scroll + 1 || y > PanelBottom - RowH)
@@ -371,11 +434,12 @@ public sealed class BoxEditorScreen
                 continue;
             }
 
-            Field field = Fields[i];
+            Field field = _fields[i];
             if (field.Section != lastSection)
             {
                 lastSection = field.Section;
-                Ui.Text(field.Section, ListX + 12, y + 2, 18, Theme.Accent);
+                string heading = field.Section == "MOVE" ? $"MOVE: {MoveTitle}    Q / E  other moves" : field.Section;
+                Ui.Text(heading, ListX + 12, y + 2, 18, Theme.Accent);
                 y += RowH;
                 if (y > PanelBottom - RowH)
                 {
@@ -406,7 +470,7 @@ public sealed class BoxEditorScreen
         Ui.TextRight(_playing ? "playing (half speed)" : "paused", PreviewX + PreviewW - 12, PanelTop + 8, Font, Theme.TextDim);
 
         FighterStats stats = Fighter.ToStats();
-        AttackData punch = stats.Punch;
+        AttackData punch = M(Fighter).ToAttack();
         int total = punch.TotalFrames;
         int frame = Math.Min(_frame, total); // frames past the end show standing (the pause between punches)
         bool attacking = frame >= 1 && _frame <= total;
@@ -421,8 +485,9 @@ public sealed class BoxEditorScreen
 
         // Pose: the punch frame the game would show, or standing.
         LookData look = Fighter.Look;
-        List<LookFrame> pose = attacking && look.Frames(ClipId.Punch).Count > 0 ? look.Frames(ClipId.Punch) : look.Frames(ClipId.Idle);
-        int poseIndex = attacking && pose == look.Frames(ClipId.Punch) ? ClipPicker.PunchFrame(pose.Count, punch, frame) : 0;
+        List<LookFrame> movePose = MovePose(look, punch.Slot);
+        List<LookFrame> pose = attacking && movePose.Count > 0 ? movePose : look.Frames(ClipId.Idle);
+        int poseIndex = attacking && movePose.Count > 0 ? ClipPicker.PunchFrame(pose.Count, punch, frame) : 0;
         bool drewPose = pose.Count > 0 && _looks.DrawPicture(_slot, pose[poseIndex], feetX, feetY, 1, Color.White);
         if (!drewPose)
         {
@@ -431,8 +496,10 @@ public sealed class BoxEditorScreen
         }
 
         // Swing effect, as in a match.
-        List<LookFrame> swing = look.Frames(ClipId.SwingFx);
-        if (attacking && EffectTiming.At(swing, frame - punch.FirstActiveFrame) is (int fx, float alpha))
+        List<LookFrame> swing = EffectTiming.SwingFrames(look, punch.Slot);
+        int sinceActive = frame - punch.FirstActiveFrame;
+        int coin = sinceActive < 0 ? 0 : Math.Min(punch.Coins - 1, sinceActive / Math.Max(1, punch.CoinInterval));
+        if (attacking && EffectTiming.At(swing, sinceActive - (coin * punch.CoinInterval)) is (int fx, float alpha))
         {
             (float sx, float sy) = (feetX + punch.HitboxOffsetX + (punch.HitboxWidth / 2f), feetY + punch.HitboxOffsetY + (punch.HitboxHeight / 2f));
             _looks.DrawEffect(_slot, swing[fx], sx, sy, 1, alpha);
@@ -461,6 +528,28 @@ public sealed class BoxEditorScreen
         Raylib.EndScissorMode();
 
         DrawTimeline(punch, attacking ? frame : 0);
+    }
+
+    /// <summary>A move's poses: its own clip, else the next one down (E.G.O → Skill 3 → Skill 1).</summary>
+    private static List<LookFrame> MovePose(LookData look, MoveSlot slot)
+    {
+        ClipId[] chain = slot switch
+        {
+            MoveSlot.Skill2 => new[] { ClipId.Skill2, ClipId.Punch },
+            MoveSlot.Skill3 => new[] { ClipId.Skill3, ClipId.Punch },
+            MoveSlot.Ego => new[] { ClipId.Ego, ClipId.Skill3, ClipId.Punch },
+            _ => new[] { ClipId.Punch },
+        };
+
+        foreach (ClipId clip in chain)
+        {
+            if (look.Frames(clip).Count > 0)
+            {
+                return look.Frames(clip);
+            }
+        }
+
+        return new List<LookFrame>();
     }
 
     private void DrawTimeline(AttackData punch, int frame)

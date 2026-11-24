@@ -133,8 +133,13 @@ public static class ArenaRenderer
     /// <summary>The look's swing effect on the hitbox while the attack is out.</summary>
     private static void DrawSwingEffect(LookManager looks, LookSlot slot, Fighter f)
     {
-        List<LookFrame> frames = looks.Get(slot).Frames(ClipId.SwingFx);
-        if (f.CurrentAttack is not { } attack || EffectTiming.Swing(frames, f) is not (int index, float alpha))
+        if (f.CurrentAttack is not { } attack)
+        {
+            return;
+        }
+
+        List<LookFrame> frames = EffectTiming.SwingFrames(looks.Get(slot), attack.Slot);
+        if (EffectTiming.Swing(frames, f) is not (int index, float alpha))
         {
             return;
         }

@@ -14,7 +14,26 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 5 (testing):** core combat. A full round plays out against the dummy.
+**Step 6 (testing):** the first complete ID.
+
+- **Skills 1-3 on J / K / L**, each its own move with frame data, hitbox, damage, type, Sin and
+  statuses. **Coins** = hits: a 3-coin skill hits three times, a few frames apart.
+- **Defense on S**, one per fighter: **Guard** (hold: a quarter of the damage, full Stagger
+  damage, blockstun), **Evade** (press: backstep with invincible frames) or **Counter** (press: a
+  parry window; a hit inside it is cancelled and the attacker reels).
+- **E.G.O on I**: paid with Sin resources (training box: 4 Wrath), not while panicking, with a
+  grade (ZAYIN ... ALEPH) and its own banner. The HUD shows how close it is.
+- **Passive**, one per fighter: +clash power, +damage below half health, +Sanity per hit, a status
+  on every hit, or less Stagger damage. **Charge** can now be spent by a move for extra damage.
+- **Looks:** new clips for Skill 2, Skill 3, E.G.O, defense and evade, plus an effect per skill
+  (a 3-coin skill replays its effect for each coin). Empty clips fall back sensibly (Skill 2 uses
+  Skill 1's poses, evade uses jump). Auto look sorts S1 / S2 / S3, guard, evade and E.G.O names
+  and their effects. **Ctrl+Q** in F3 adds the picked sprite to the clip selected in F4.
+- **F2**: Q / E switch between Skill 1, 2, 3 and E.G.O; every move field, coins, E.G.O cost,
+  Charge, plus the defense and passive. Older fighter files gain the new moves automatically.
+- **F6** dummy: stand still, fight back (rotates its skills, uses E.G.O when it can), or defend.
+
+**Step 5 (done):** core combat. A full round plays out against the dummy.
 
 - **Health and K.O.:** rounds of 60 seconds; K.O. or time over (more health wins) ends a round, the
   next starts by itself, and wins are counted. R restarts the round.
@@ -160,13 +179,15 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | --- | --- |
 | A / D | walk |
 | W | jump |
-| J | punch |
+| J / K / L | Skill 1 / 2 / 3 |
+| S | defend (guard, evade or counter) |
+| I | E.G.O |
 | R | restart the round |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
 | F2 | fighter editor (Tab P1 / Dummy, `[` `]` switch fighter, Ctrl+N new fighter, Enter on the name rename, Up/Down pick, Left/Right change, Shift bigger steps, Del reset value, Space play / pause, `,` `.` step frames) |
 | F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+6 / 7 to the swing / hit effect, Ctrl+A auto look from the open file, Ctrl+Z undo it, add Shift for the Dummy, Ctrl+O open exports, Ctrl+R report) |
 | F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
-| F6 | dummy: stand still / fight back |
+| F6 | dummy: stand still / fight back / defend |
 | F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |
 | ESC | quit |
 

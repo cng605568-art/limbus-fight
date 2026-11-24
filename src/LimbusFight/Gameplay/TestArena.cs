@@ -6,8 +6,11 @@ public enum DummyMode
     /// <summary>Stands still and takes hits (Steps 1-4 behaviour).</summary>
     Stand,
 
-    /// <summary>Walks up and punches back, so clashes, trades and K.O.s on P1 can happen.</summary>
+    /// <summary>Walks up and uses its skills (and E.G.O), so clashes, trades and K.O.s on P1 can happen.</summary>
     Fight,
+
+    /// <summary>Holds its defense (guards, or evades / counters when P1 attacks).</summary>
+    Defend,
 }
 
 public enum RoundPhase
@@ -122,6 +125,8 @@ public sealed class TestArena
 
         ApplyStartOfAttackStatuses(Player1);
         ApplyStartOfAttackStatuses(Dummy);
+        AnnounceEgo(Player1);
+        AnnounceEgo(Dummy);
         TickBurn(Player1);
         TickBurn(Dummy);
 
@@ -230,10 +235,25 @@ public sealed class TestArena
     //  The fighting dummy
     // =========================================================================================
 
-    /// <summary>Stand: presses nothing. Fight: walks into range and punches on a steady beat.</summary>
+    /// <summary>
+    /// Stand: presses nothing. Fight: walks into range and uses Skill 1, 2, 3 in turn on a steady beat
+    /// (E.G.O when it can). Defend: holds guard, or evades / counters as P1's attack starts.
+    /// </summary>
     private FrameInput DummyInput()
     {
-        if (DummyMode == DummyMode.Stand || Phase != RoundPhase.Fight || !Dummy.IsActionable)
+        if (DummyMode == DummyMode.Stand || Phase != RoundPhase.Fight)
+        {
+            return FrameInput.None;
+        }
+
+        if (DummyMode == DummyMode.Defend)
+        {
+            bool hold = Dummy.Stats.Defense.Kind == DefenseKind.Guard
+                || (Player1.State == FighterState.Attack && Player1.StateFrame <= 2);
+            return hold ? new FrameInput(InputButtons.Defend) : FrameInput.None;
+        }
+
+        if (!Dummy.IsActionable)
         {
             return FrameInput.None;
         }
@@ -247,7 +267,22 @@ public sealed class TestArena
             return new FrameInput(Player1.X < Dummy.X ? InputButtons.Left : InputButtons.Right);
         }
 
-        return Frame % DummyAttackInterval == 0 ? new FrameInput(InputButtons.Punch) : FrameInput.None;
+        if (Frame % DummyAttackInterval != 0)
+        {
+            return FrameInput.None;
+        }
+
+        if (Dummy.CanUseEgo)
+        {
+            return new FrameInput(InputButtons.Ego);
+        }
+
+        return ((Frame / DummyAttackInterval) % 3) switch
+        {
+            1 when Dummy.Stats.Skill2 is not null => new FrameInput(InputButtons.Skill2),
+            2 when Dummy.Stats.Skill3 is not null => new FrameInput(InputButtons.Skill3),
+            _ => new FrameInput(InputButtons.Punch),
+        };
     }
 
     // =========================================================================================
@@ -299,8 +334,8 @@ public sealed class TestArena
             return false;
         }
 
-        float p1Power = CombatRules.ClashPower(pa, Player1.Sanity);
-        float dummyPower = CombatRules.ClashPower(da, Dummy.Sanity);
+        float p1Power = CombatRules.ClashPower(pa, Player1.Sanity) + PassiveClashBonus(Player1);
+        float dummyPower = CombatRules.ClashPower(da, Dummy.Sanity) + PassiveClashBonus(Dummy);
         (float x, float y) = a.IntersectionCenter(b);
         HitstopRemaining = CombatRules.ClashHitstop;
 
@@ -376,7 +411,57 @@ public sealed class TestArena
     {
         bool byP1 = attacker == Player1;
         float resist = defender.Stats.Resist(attack.DamageType);
+
+        // Counter: a hit inside the parry window is cancelled and the attacker reels.
+        if (defender.State == FighterState.Counter && defender.Stats.Defense.InWindow(defender.StateFrame))
+        {
+            attacker.EnterClashRecoil(CombatRules.CounterRecoil, CombatRules.ClashPushback);
+            defender.CounterSucceeded();
+            defender.AddSanity(CombatRules.SanityOnCounter);
+            HitstopRemaining = CombatRules.ClashHitstop;
+            Emit(CombatEventKind.Counter, point.X, point.Y, "COUNTER!", !byP1);
+            return;
+        }
+
+        // Guard: a little damage, full Stagger damage, blockstun; no statuses, Sins or Sanity.
+        if (defender.State is FighterState.Guard or FighterState.Blockstun)
+        {
+            DefenseStats guard = defender.Stats.Defense;
+            int chip = Math.Max(0, (int)MathF.Round(attack.Damage * resist * guard.GuardDamage));
+            int guardStagger = (int)MathF.Round(attack.StaggerDamage * resist * guard.GuardStagger * SturdyFactor(defender));
+            defender.Hp = Math.Max(0, defender.Hp - chip);
+            defender.Stagger = Math.Max(0, defender.Stagger - guardStagger);
+            attacker.OnAttackConnected();
+            defender.TakeBlock(attack);
+            HitstopRemaining = Math.Max(1, attack.Hitstop / 2);
+            LastHitFrame = Frame;
+            LastHitPoint = point;
+            LastHitAttacker = attacker;
+            Emit(CombatEventKind.Guard, point.X, point.Y, $"GUARD -{chip}", byP1);
+            CheckStaggerBreak(defender, byP1);
+            return;
+        }
+
         float damage = attack.Damage * resist * CombatRules.SanityMultiplier(attacker.Sanity);
+
+        if (attacker.Stats.Passive.Kind == PassiveKind.Desperation && attacker.Hp * 2 < attacker.Stats.MaxHp)
+        {
+            damage *= 1f + (attacker.Stats.Passive.Value / 100f);
+        }
+
+        // Charge: spent by moves that ask for it, for extra damage.
+        if (attack.ChargeCost > 0 && attacker.Status(StatusKind.Charge).Count >= attack.ChargeCost)
+        {
+            ref StatusStack charge = ref attacker.Status(StatusKind.Charge);
+            charge.Count -= attack.ChargeCost;
+            if (charge.Count <= 0)
+            {
+                charge = default;
+            }
+
+            damage += attack.ChargeBonusDamage;
+            Emit(CombatEventKind.Charge, attacker.X, attacker.Y - attacker.Stats.HurtboxHeight - 10f, "CHARGE", byP1);
+        }
 
         if (attacker.IsPanicking)
         {
@@ -403,7 +488,7 @@ public sealed class TestArena
         }
 
         damage += defender.ConsumeStatus(StatusKind.Rupture);
-        float stagger = (attack.StaggerDamage * resist) + defender.ConsumeStatus(StatusKind.Tremor);
+        float stagger = ((attack.StaggerDamage * resist) + defender.ConsumeStatus(StatusKind.Tremor)) * SturdyFactor(defender);
         int sinking = defender.ConsumeStatus(StatusKind.Sinking);
 
         int hpLoss = Math.Max(0, (int)MathF.Round(damage));
@@ -420,9 +505,16 @@ public sealed class TestArena
             attacker.AddStatus(apply);
         }
 
+        PassiveStats passive = attacker.Stats.Passive;
+        if (passive.Kind == PassiveKind.StatusOnHit && passive.Value > 0)
+        {
+            defender.AddStatus(new StatusApply(passive.Status, passive.Value, 1));
+        }
+
         attacker.AddSin(attack.Sin);
 
-        if (attacker.AddSanity(CombatRules.SanityOnHitLanded))
+        int composure = passive.Kind == PassiveKind.Composure ? passive.Value : 0;
+        if (attacker.AddSanity(CombatRules.SanityOnHitLanded + composure))
         {
             Emit(CombatEventKind.Panic, attacker.X, attacker.Y - attacker.Stats.HurtboxHeight, "PANIC", byP1);
         }
@@ -448,10 +540,31 @@ public sealed class TestArena
             Emit(CombatEventKind.Crit, point.X, point.Y - 30f, "CRIT", byP1);
         }
 
+        CheckStaggerBreak(defender, byP1);
+    }
+
+    private void CheckStaggerBreak(Fighter defender, bool byP1)
+    {
         if (defender.Stagger <= 0 && defender.State != FighterState.Staggered && defender.Hp > 0)
         {
             defender.EnterStaggered();
             Emit(CombatEventKind.Stagger, defender.X, defender.Y - defender.Stats.HurtboxHeight - 20f, "STAGGERED", !byP1);
+        }
+    }
+
+    private static float PassiveClashBonus(Fighter f) =>
+        f.Stats.Passive.Kind == PassiveKind.ClashPower ? f.Stats.Passive.Value : 0f;
+
+    private static float SturdyFactor(Fighter f) =>
+        f.Stats.Passive.Kind == PassiveKind.Sturdy ? Math.Clamp(1f - (f.Stats.Passive.Value / 100f), 0f, 1f) : 1f;
+
+    private void AnnounceEgo(Fighter fighter)
+    {
+        if (fighter.StartedEgo && fighter.CurrentAttack is { } ego)
+        {
+            string grade = ego.Grade.Length > 0 ? $"  [{ego.Grade}]" : string.Empty;
+            string name = ego.Name.Equals("E.G.O", StringComparison.OrdinalIgnoreCase) ? string.Empty : "  " + ego.Name;
+            Emit(CombatEventKind.Ego, fighter.X, fighter.Y - fighter.Stats.HurtboxHeight - 40f, $"E.G.O{name}{grade}", fighter == Player1);
         }
     }
 

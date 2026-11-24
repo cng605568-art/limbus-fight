@@ -19,6 +19,18 @@ public enum FighterState
 
     /// <summary>Knocked out: health reached 0.</summary>
     Down,
+
+    /// <summary>Holding the defense button with a Guard defense (Step 6).</summary>
+    Guard,
+
+    /// <summary>Hit while guarding: briefly stuck in guard.</summary>
+    Blockstun,
+
+    /// <summary>Evade defense: backstep with invincible frames.</summary>
+    Evade,
+
+    /// <summary>Counter defense: parry window.</summary>
+    Counter,
 }
 
 /// <summary>
@@ -38,7 +50,7 @@ public sealed class Fighter
 
     private InputButtons _held;
     private InputButtons _previousHeld;
-    private int _punchBuffer;
+    private readonly int[] _buffers = new int[8]; // one per button bit; only attack/defense buttons are used
 
     public Fighter(string name, float x, float floorY, int facing, bool isDummy, FighterStats? stats = null)
     {
@@ -85,7 +97,7 @@ public sealed class Fighter
     public AttackData? CurrentAttack { get; private set; }
 
     /// <summary>True once the current attack has hit; one hit per attack.</summary>
-    public bool AttackConnected { get; private set; }
+    public bool AttackConnected => CurrentAttack is { } a && CoinsLanded >= a.Coins;
 
     public int HitstunRemaining { get; private set; }
 
@@ -113,21 +125,35 @@ public sealed class Fighter
 
         InputButtons pressed = _held & ~_previousHeld;
 
-        if ((pressed & InputButtons.Punch) != 0)
+        foreach (InputButtons button in BufferedButtons)
         {
-            _punchBuffer = InputBufferFrames;
-        }
-        else if (!frozen && _punchBuffer > 0)
-        {
-            _punchBuffer--;
+            int i = BitIndex(button);
+            if ((pressed & button) != 0)
+            {
+                _buffers[i] = InputBufferFrames;
+            }
+            else if (!frozen && _buffers[i] > 0)
+            {
+                _buffers[i]--;
+            }
         }
     }
+
+    private static readonly InputButtons[] BufferedButtons =
+        { InputButtons.Punch, InputButtons.Skill2, InputButtons.Skill3, InputButtons.Defend, InputButtons.Ego };
+
+    private static int BitIndex(InputButtons button) => System.Numerics.BitOperations.TrailingZeroCount((int)button);
+
+    private bool Buffered(InputButtons button) => _buffers[BitIndex(button)] > 0;
+
+    private void ClearBuffer(InputButtons button) => _buffers[BitIndex(button)] = 0;
 
     /// <summary>Advances the state machine and physics by one frame. Skipped during hitstop.</summary>
     public void Update()
     {
         StateFrame++;
         StartedAttack = false;
+        StartedEgo = false;
 
         if (PanicRemaining > 0 && --PanicRemaining == 0)
         {
@@ -164,6 +190,18 @@ public sealed class Fighter
             case FighterState.ClashRecoil when RecoilRemaining <= 0:
                 Enter(FighterState.Idle);
                 break;
+
+            case FighterState.Guard when (_held & InputButtons.Defend) == 0:
+                Enter(FighterState.Idle);
+                break;
+
+            case FighterState.Blockstun when BlockstunRemaining <= 0:
+                Enter((_held & InputButtons.Defend) != 0 && Stats.Defense.Kind == DefenseKind.Guard ? FighterState.Guard : FighterState.Idle);
+                break;
+
+            case FighterState.Evade or FighterState.Counter when StateFrame > Stats.Defense.TotalFrames:
+                Enter(FighterState.Idle);
+                break;
         }
 
         // 2. Neutral: walk / jump / attack.
@@ -171,8 +209,14 @@ public sealed class Fighter
         {
             HandleNeutral();
         }
+        else if (State == FighterState.Evade)
+        {
+            // Step back through the invincible frames, then stop.
+            VelocityX = StateFrame <= Stats.Defense.WindowEnd ? -Facing * Stats.Defense.EvadeSpeed : 0f;
+        }
         else if (State is FighterState.JumpSquat or FighterState.Landing or FighterState.Attack or FighterState.Hitstun
-                 or FighterState.Staggered or FighterState.ClashRecoil or FighterState.Down)
+                 or FighterState.Staggered or FighterState.ClashRecoil or FighterState.Down
+                 or FighterState.Guard or FighterState.Blockstun or FighterState.Counter)
         {
             VelocityX = 0f;
         }
@@ -188,6 +232,10 @@ public sealed class Fighter
         else if (State == FighterState.ClashRecoil)
         {
             RecoilRemaining--;
+        }
+        else if (State == FighterState.Blockstun)
+        {
+            BlockstunRemaining--;
         }
 
         // 3. Physics.
@@ -240,11 +288,11 @@ public sealed class Fighter
         PushbackVelocity = 0f;
         Facing = facing >= 0 ? 1 : -1;
         CurrentAttack = null;
-        AttackConnected = false;
+        CoinsLanded = 0;
         HitstunRemaining = 0;
         HitsTaken = 0;
         ComboCount = 0;
-        _punchBuffer = 0;
+        Array.Clear(_buffers);
         State = FighterState.Idle;
         StateFrame = 0;
         ResetCombat();
@@ -280,7 +328,7 @@ public sealed class Fighter
             return;
         }
 
-        AttackConnected = true;
+        CoinsLanded++;
         PushbackVelocity = -Facing * CurrentAttack.Pushback;
     }
 
@@ -445,6 +493,11 @@ public sealed class Fighter
     {
         get
         {
+            if (IsInvincible)
+            {
+                yield break;
+            }
+
             yield return BodyHurtbox;
 
             if (LimbHurtbox is Box limb)
@@ -468,8 +521,49 @@ public sealed class Fighter
         }
     }
 
-    /// <summary>The hitbox that can still hit this frame (red in debug view), else null.</summary>
-    public Box? LiveHitbox => AttackConnected ? null : ActiveFrameHitbox;
+    /// <summary>
+    /// The hitbox that can still hit this frame (red in debug view), else null. Each coin is one hit:
+    /// the next coin can land <see cref="AttackData.CoinInterval"/> frames after the previous one.
+    /// </summary>
+    public Box? LiveHitbox
+    {
+        get
+        {
+            if (CurrentAttack is not { } attack || CoinsLanded >= attack.Coins)
+            {
+                return null;
+            }
+
+            int nextCoinFrame = attack.FirstActiveFrame + (CoinsLanded * attack.CoinInterval);
+            return StateFrame >= nextCoinFrame ? ActiveFrameHitbox : null;
+        }
+    }
+
+    /// <summary>Hits landed by the current attack (one per coin).</summary>
+    public int CoinsLanded { get; private set; }
+
+    /// <summary>Evading through the invincible frames: nothing can hit this fighter.</summary>
+    public bool IsInvincible => State == FighterState.Evade && Stats.Defense.InWindow(StateFrame);
+
+    /// <summary>True on the frame an E.G.O began (for the E.G.O banner).</summary>
+    public bool StartedEgo { get; private set; }
+
+    /// <summary>Whether the E.G.O can be used now: it exists, its Sin cost is met, and no Panic.</summary>
+    public bool CanUseEgo => Stats.Ego is { } ego && !IsPanicking && ego.SinCost.All(c => Sins[(int)c.Sin] >= c.Amount);
+
+    public int BlockstunRemaining { get; private set; }
+
+    /// <summary>Guarded a hit: blockstun instead of hitstun.</summary>
+    public void TakeBlock(AttackData attack)
+    {
+        CurrentAttack = null;
+        VelocityX = 0f;
+        BlockstunRemaining = Math.Max(1, attack.Hitstun / 2);
+        Enter(FighterState.Blockstun);
+    }
+
+    /// <summary>Counter landed: back to neutral at once.</summary>
+    public void CounterSucceeded() => Enter(FighterState.Idle);
 
     /// <summary>0..1 arm extension for drawing the punch.</summary>
     public float ArmExtension
@@ -515,14 +609,43 @@ public sealed class Fighter
 
     private void HandleNeutral()
     {
-        if (_punchBuffer > 0)
+        // Strongest first: E.G.O, Skill 3, Skill 2, Skill 1.
+        if (Buffered(InputButtons.Ego) && CanUseEgo)
         {
-            _punchBuffer = 0;
-            CurrentAttack = Stats.Punch;
-            AttackConnected = false;
+            ClearBuffer(InputButtons.Ego);
+            foreach (SinCost cost in Stats.Ego!.SinCost)
+            {
+                Sins[(int)cost.Sin] -= cost.Amount;
+            }
+
+            StartedEgo = true;
+            StartAttack(Stats.Ego);
+            return;
+        }
+
+        foreach ((InputButtons button, AttackData? move) in new[] { (InputButtons.Skill3, Stats.Skill3), (InputButtons.Skill2, Stats.Skill2), (InputButtons.Punch, (AttackData?)Stats.Punch) })
+        {
+            if (Buffered(button) && move is not null)
+            {
+                ClearBuffer(button);
+                StartAttack(move);
+                return;
+            }
+        }
+
+        // Defense: Guard while held; Evade / Counter on press.
+        if (Stats.Defense.Kind == DefenseKind.Guard && (_held & InputButtons.Defend) != 0)
+        {
             VelocityX = 0f;
-            StartedAttack = true;
-            Enter(FighterState.Attack);
+            Enter(FighterState.Guard);
+            return;
+        }
+
+        if (Stats.Defense.Kind != DefenseKind.Guard && Buffered(InputButtons.Defend))
+        {
+            ClearBuffer(InputButtons.Defend);
+            VelocityX = 0f;
+            Enter(Stats.Defense.Kind == DefenseKind.Evade ? FighterState.Evade : FighterState.Counter);
             return;
         }
 
@@ -548,6 +671,15 @@ public sealed class Fighter
         VelocityX = relative > 0 ? horizontal * Stats.WalkForwardSpeed
             : relative < 0 ? horizontal * Stats.WalkBackwardSpeed
             : 0f;
+    }
+
+    private void StartAttack(AttackData move)
+    {
+        CurrentAttack = move;
+        CoinsLanded = 0;
+        VelocityX = 0f;
+        StartedAttack = true;
+        Enter(FighterState.Attack);
     }
 
     private void TakeOff()

@@ -55,6 +55,50 @@ public sealed class StatusData
     public StatusApply ToApply() => new(Status, Potency, Count);
 }
 
+/// <summary>One Sin cost of an E.G.O.</summary>
+public sealed class SinCostData
+{
+    public Sin Sin { get; set; } = Sin.Wrath;
+
+    public int Amount { get; set; } = 1;
+}
+
+/// <summary>The defense button (Step 6).</summary>
+public sealed class DefenseData
+{
+    public DefenseKind Kind { get; set; } = DefenseStats.Default.Kind;
+
+    public float GuardDamage { get; set; } = DefenseStats.Default.GuardDamage;
+
+    public float GuardStagger { get; set; } = DefenseStats.Default.GuardStagger;
+
+    public int TotalFrames { get; set; } = DefenseStats.Default.TotalFrames;
+
+    public int WindowStart { get; set; } = DefenseStats.Default.WindowStart;
+
+    public int WindowEnd { get; set; } = DefenseStats.Default.WindowEnd;
+
+    public float EvadeSpeed { get; set; } = DefenseStats.Default.EvadeSpeed;
+
+    public DefenseStats ToStats() => new()
+    {
+        Kind = Kind, GuardDamage = GuardDamage, GuardStagger = GuardStagger, TotalFrames = TotalFrames,
+        WindowStart = WindowStart, WindowEnd = WindowEnd, EvadeSpeed = EvadeSpeed,
+    };
+}
+
+/// <summary>The always-on passive (Step 6).</summary>
+public sealed class PassiveData
+{
+    public PassiveKind Kind { get; set; } = PassiveKind.None;
+
+    public int Value { get; set; }
+
+    public StatusKind Status { get; set; } = StatusKind.Burn;
+
+    public PassiveStats ToStats() => new() { Kind = Kind, Value = Value, Status = Status };
+}
+
 /// <summary>Walking and jumping, per 60 Hz frame.</summary>
 public sealed class MovementData
 {
@@ -73,9 +117,56 @@ public sealed class MovementData
     public int LandingFrames { get; set; } = FighterStats.Default.LandingFrames;
 }
 
-/// <summary>One move: frame data plus its hitbox. Step 4 has one, on the punch button.</summary>
+/// <summary>One move: frame data, hitbox and combat numbers, on one button.</summary>
 public sealed class MoveData
 {
+    /// <summary>Buttons, in order: Skill 1 (J, called "punch" since Step 1), Skill 2 (K), Skill 3 (L), E.G.O (I).</summary>
+    public static readonly string[] Buttons = { "punch", "skill2", "skill3", "ego" };
+
+    /// <summary>A move with the training box's numbers for a button.</summary>
+    public static MoveData Default(string button)
+    {
+        AttackData a = button switch
+        {
+            "skill2" => AttackData.DefaultSkill2,
+            "skill3" => AttackData.DefaultSkill3,
+            "ego" => AttackData.DefaultEgo,
+            _ => AttackData.TestPunch,
+        };
+
+        return new MoveData
+        {
+            Id = button == "punch" ? "punch" : button,
+            Name = a.Name,
+            Button = button,
+            Startup = a.Startup, Active = a.Active, Recovery = a.Recovery, Hitstun = a.Hitstun, Hitstop = a.Hitstop, Pushback = a.Pushback,
+            Hitbox = new BoxData { X = a.HitboxOffsetX, Y = a.HitboxOffsetY, Width = a.HitboxWidth, Height = a.HitboxHeight },
+            ArmHurtboxWidth = a.LimbHurtboxWidth,
+            Damage = a.Damage, StaggerDamage = a.StaggerDamage, ClashPower = a.ClashPower, DamageType = a.DamageType, Sin = a.Sin,
+            Coins = a.Coins, CoinInterval = a.CoinInterval, Grade = a.Grade.Length > 0 ? a.Grade : null,
+            SinCost = a.SinCost.Select(c => new SinCostData { Sin = c.Sin, Amount = c.Amount }).ToList(),
+        };
+    }
+
+    /// <summary>False switches the move off (its button does nothing).</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Hits: each coin is one hit, <see cref="CoinInterval"/> frames apart.</summary>
+    public int Coins { get; set; } = 1;
+
+    public int CoinInterval { get; set; } = 4;
+
+    /// <summary>E.G.O: Sin resources it costs.</summary>
+    public List<SinCostData> SinCost { get; set; } = new();
+
+    /// <summary>E.G.O grade label (ZAYIN, TETH, HE, WAW, ALEPH).</summary>
+    public string? Grade { get; set; }
+
+    /// <summary>Spends this much Charge, if the fighter has it, for <see cref="ChargeBonusDamage"/> extra damage per hit.</summary>
+    public int ChargeCost { get; set; }
+
+    public int ChargeBonusDamage { get; set; }
+
     public string Id { get; set; } = "punch";
 
     public string Name { get; set; } = "Punch";
@@ -122,8 +213,23 @@ public sealed class MoveData
     /// <summary>Statuses the attacker gains when it hits.</summary>
     public List<StatusData> SelfOnHit { get; set; } = new();
 
+    public MoveSlot Slot => Button switch
+    {
+        "skill2" => MoveSlot.Skill2,
+        "skill3" => MoveSlot.Skill3,
+        "ego" => MoveSlot.Ego,
+        _ => MoveSlot.Skill1,
+    };
+
     public AttackData ToAttack() => new()
     {
+        Slot = Slot,
+        Coins = Coins,
+        CoinInterval = CoinInterval,
+        SinCost = SinCost.Select(c => new SinCost(c.Sin, c.Amount)).ToArray(),
+        Grade = Grade ?? string.Empty,
+        ChargeCost = ChargeCost,
+        ChargeBonusDamage = ChargeBonusDamage,
         Name = Name,
         Startup = Startup,
         Active = Active,
@@ -165,26 +271,30 @@ public sealed class FighterData
 
     public CombatData Combat { get; set; } = new();
 
-    public List<MoveData> Moves { get; set; } = new() { new MoveData() };
+    public DefenseData Defense { get; set; } = new();
+
+    public PassiveData Passive { get; set; } = new();
+
+    public List<MoveData> Moves { get; set; } = MoveData.Buttons.Select(MoveData.Default).ToList();
 
     /// <summary>How it looks: clips of Limbus sprite names (see Animation/LookData).</summary>
     public LookData Look { get; set; } = new();
 
-    /// <summary>The move on the punch button (created if missing).</summary>
+    /// <summary>The move on Skill 1 / the punch button (created if missing).</summary>
     [JsonIgnore]
-    public MoveData Punch
-    {
-        get
-        {
-            MoveData? move = Moves.FirstOrDefault(m => m.Button == "punch");
-            if (move is null)
-            {
-                move = new MoveData();
-                Moves.Add(move);
-            }
+    public MoveData Punch => Move("punch");
 
-            return move;
+    /// <summary>The move on a button ("punch", "skill2", "skill3", "ego"); created with defaults if missing.</summary>
+    public MoveData Move(string button)
+    {
+        MoveData? move = Moves.FirstOrDefault(m => m.Button == button);
+        if (move is null)
+        {
+            move = MoveData.Default(button);
+            Moves.Add(move);
         }
+
+        return move;
     }
 
     public FighterStats ToStats() => new()
@@ -207,6 +317,11 @@ public sealed class FighterData
         PierceResist = Combat.PierceResist,
         BluntResist = Combat.BluntResist,
         Punch = Punch.ToAttack(),
+        Skill2 = Move("skill2") is { Enabled: true } s2 ? s2.ToAttack() : null,
+        Skill3 = Move("skill3") is { Enabled: true } s3 ? s3.ToAttack() : null,
+        Ego = Move("ego") is { Enabled: true } eg ? eg.ToAttack() : null,
+        Defense = Defense.ToStats(),
+        Passive = Passive.ToStats(),
     };
 
     /// <summary>Clamps every number to a playable range (hand-edited files, typos).</summary>
@@ -277,9 +392,41 @@ public sealed class FighterData
 
             move.OnHit.RemoveAll(st => st is null || st.Potency == 0 || st.Count == 0);
             move.SelfOnHit.RemoveAll(st => st is null || st.Potency == 0 || st.Count == 0);
+
+            move.Coins = Math.Clamp(move.Coins, 1, 10);
+            move.CoinInterval = Math.Clamp(move.CoinInterval, 1, 60);
+            move.Active = Math.Max(move.Active, ((move.Coins - 1) * move.CoinInterval) + 1); // room for every coin
+            move.SinCost ??= new List<SinCostData>();
+            move.SinCost.RemoveAll(c => c is null || c.Amount <= 0);
+            foreach (SinCostData c in move.SinCost)
+            {
+                c.Sin = Enum.IsDefined(c.Sin) ? c.Sin : Sin.Wrath;
+                c.Amount = Math.Clamp(c.Amount, 1, CombatRules.SinCap);
+            }
+
+            move.ChargeCost = Math.Clamp(move.ChargeCost, 0, CombatRules.StatusCap);
+            move.ChargeBonusDamage = Math.Clamp(move.ChargeBonusDamage, 0, 999);
         }
 
-        _ = Punch; // make sure the punch button has a move
+        // Files from Steps 4-5 only have the punch: add the other buttons with training box numbers.
+        foreach (string button in MoveData.Buttons)
+        {
+            _ = Move(button);
+        }
+
+        Defense ??= new DefenseData();
+        Defense.Kind = Enum.IsDefined(Defense.Kind) ? Defense.Kind : DefenseKind.Guard;
+        Defense.GuardDamage = Clamp(Defense.GuardDamage, 0, 1, 0.25f);
+        Defense.GuardStagger = Clamp(Defense.GuardStagger, 0, 2, 1f);
+        Defense.TotalFrames = Math.Clamp(Defense.TotalFrames, 2, 120);
+        Defense.WindowStart = Math.Clamp(Defense.WindowStart, 1, Defense.TotalFrames);
+        Defense.WindowEnd = Math.Clamp(Defense.WindowEnd, Defense.WindowStart, Defense.TotalFrames);
+        Defense.EvadeSpeed = Clamp(Defense.EvadeSpeed, 0, 40, 7);
+
+        Passive ??= new PassiveData();
+        Passive.Kind = Enum.IsDefined(Passive.Kind) ? Passive.Kind : PassiveKind.None;
+        Passive.Status = Enum.IsDefined(Passive.Status) ? Passive.Status : StatusKind.Burn;
+        Passive.Value = Math.Clamp(Passive.Value, 0, 999);
     }
 
     private static float Clamp(float value, float min, float max, float fallback) =>

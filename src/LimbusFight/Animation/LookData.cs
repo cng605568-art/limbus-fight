@@ -18,6 +18,16 @@ public enum ClipId
 
     /// <summary>Effect drawn where a hit lands.</summary>
     HitFx,
+
+    // ---- Step 6 (appended so older look files and Ctrl+1..7 keep their meaning) -------------
+    Skill2,
+    Skill3,
+    Guard,
+    Evade,
+    Ego,
+    Skill2Fx,
+    Skill3Fx,
+    EgoFx,
 }
 
 /// <summary>Which fighter a look belongs to.</summary>
@@ -129,12 +139,15 @@ public sealed class LookData
         ClipId.Idle => 12,
         ClipId.Walk => 8,
         ClipId.Hit => 8,
-        ClipId.SwingFx or ClipId.HitFx => 3,
+        ClipId.SwingFx or ClipId.HitFx or ClipId.Skill2Fx or ClipId.Skill3Fx or ClipId.EgoFx => 3,
         _ => 6,
     };
 
     /// <summary>True for the effect clips (drawn on top of the fighters, not as a pose).</summary>
-    public static bool IsEffect(ClipId clip) => clip is ClipId.SwingFx or ClipId.HitFx;
+    public static bool IsEffect(ClipId clip) => clip is ClipId.SwingFx or ClipId.HitFx or ClipId.Skill2Fx or ClipId.Skill3Fx or ClipId.EgoFx;
+
+    /// <summary>Clips whose frames follow a move's startup / active / recovery.</summary>
+    public static bool IsMove(ClipId clip) => clip is ClipId.Punch or ClipId.Skill2 or ClipId.Skill3 or ClipId.Ego;
 
     /// <summary>Frames of the pose clips only (no effects).</summary>
     [JsonIgnore]

@@ -8,7 +8,21 @@ public enum InputButtons : byte
     Left = 1 << 0,
     Right = 1 << 1,
     Up = 1 << 2,
+
+    /// <summary>Skill 1 (J). Kept as "Punch" so Step 1-5 code and tests read the same.</summary>
     Punch = 1 << 3,
+
+    /// <summary>Skill 2 (K).</summary>
+    Skill2 = 1 << 4,
+
+    /// <summary>Skill 3 (L).</summary>
+    Skill3 = 1 << 5,
+
+    /// <summary>Defense (S): guard while held, or evade / counter on press, per fighter.</summary>
+    Defend = 1 << 6,
+
+    /// <summary>E.G.O (I): super move paid with Sin resources.</summary>
+    Ego = 1 << 7,
 }
 
 /// <summary>

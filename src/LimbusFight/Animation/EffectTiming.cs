@@ -19,7 +19,33 @@ public static class EffectTiming
             return null;
         }
 
-        return At(frames, fighter.StateFrame - attack.FirstActiveFrame);
+        // Multi-coin moves replay the effect for each coin.
+        int sinceActive = fighter.StateFrame - attack.FirstActiveFrame;
+        int coin = sinceActive < 0 ? 0 : Math.Min(attack.Coins - 1, sinceActive / Math.Max(1, attack.CoinInterval));
+        return At(frames, sinceActive - (coin * attack.CoinInterval));
+    }
+
+    /// <summary>The swing-effect frames for a move: its own effect clip, else Skill 1's.</summary>
+    public static List<LookFrame> SwingFrames(LookData look, MoveSlot slot)
+    {
+        ClipId[] chain = slot switch
+        {
+            MoveSlot.Skill2 => new[] { ClipId.Skill2Fx, ClipId.SwingFx },
+            MoveSlot.Skill3 => new[] { ClipId.Skill3Fx, ClipId.SwingFx },
+            MoveSlot.Ego => new[] { ClipId.EgoFx, ClipId.Skill3Fx, ClipId.SwingFx },
+            _ => new[] { ClipId.SwingFx },
+        };
+
+        foreach (ClipId clip in chain)
+        {
+            List<LookFrame> frames = look.Frames(clip);
+            if (frames.Count > 0)
+            {
+                return frames;
+            }
+        }
+
+        return new List<LookFrame>();
     }
 
     /// <summary>Hit effect: starts on the frame the hit landed (<paramref name="age"/> 0) and keeps playing through hitstop.</summary>
