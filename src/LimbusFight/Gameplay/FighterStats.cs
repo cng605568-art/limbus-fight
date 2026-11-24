@@ -9,6 +9,9 @@ public sealed record FighterStats
 {
     public string Name { get; init; } = "Training Box";
 
+    /// <summary>Box colour (0xRRGGBB) when the fighter has no look; 0 = the slot's default colour.</summary>
+    public uint BodyRgb { get; init; }
+
     // ---- Body geometry (stage pixels) ------------------------------------------------------
     public float HurtboxWidth { get; init; } = 84f;
 

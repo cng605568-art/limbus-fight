@@ -75,12 +75,12 @@ public static class AutoLook
     /// <summary>Keyword rules, matched against single lower-case words of a name. First match per word counts.</summary>
     private static readonly Rule[] Rules = BuildRules();
 
-    private static readonly string[] SinnerWords =
+    public static readonly string[] SinnerWords =
     {
         "yisang", "faust", "donquixote", "ryoshu", "meursault", "honglu", "heathcliff", "ishmael", "rodion", "sinclair", "outis", "gregor",
     };
 
-    private static readonly string[] SinnerNames =
+    public static readonly string[] SinnerNames =
     {
         "Yi Sang", "Faust", "Don Quixote", "Ryoshu", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor",
     };

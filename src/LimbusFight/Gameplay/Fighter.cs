@@ -66,7 +66,8 @@ public sealed class Fighter
         ResetCombat();
     }
 
-    public string Name { get; }
+    /// <summary>Slot tag shown above the fighter and in the HUD: "P1", "P2", "CPU", "DUMMY".</summary>
+    public string Name { get; set; }
 
     /// <summary>Body boxes, movement and moves of the fighter in this slot.</summary>
     public FighterStats Stats { get; private set; }

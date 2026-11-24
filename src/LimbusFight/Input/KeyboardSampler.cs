@@ -27,8 +27,27 @@ public sealed class KeyboardSampler
         (KeyboardKey.I, InputButtons.Ego),
     };
 
+    /// <summary>Player 2: arrows to move / jump; skills on numpad 1-3 or , . /; defend on numpad 0 or Right Shift; E.G.O on numpad Enter or '.</summary>
+    public static readonly IReadOnlyList<(KeyboardKey Key, InputButtons Button)> Player2Bindings = new[]
+    {
+        (KeyboardKey.Left, InputButtons.Left),
+        (KeyboardKey.Right, InputButtons.Right),
+        (KeyboardKey.Up, InputButtons.Up),
+        (KeyboardKey.Kp1, InputButtons.Punch),
+        (KeyboardKey.Comma, InputButtons.Punch),
+        (KeyboardKey.Kp2, InputButtons.Skill2),
+        (KeyboardKey.Period, InputButtons.Skill2),
+        (KeyboardKey.Kp3, InputButtons.Skill3),
+        (KeyboardKey.Slash, InputButtons.Skill3),
+        (KeyboardKey.Kp0, InputButtons.Defend),
+        (KeyboardKey.RightShift, InputButtons.Defend),
+        (KeyboardKey.KpEnter, InputButtons.Ego),
+        (KeyboardKey.Apostrophe, InputButtons.Ego),
+    };
+
     private readonly HashSet<KeyboardKey> _pressedThisFrame = new();
     private InputButtons _pressedSinceLastTick;
+    private InputButtons _p2PressedSinceLastTick;
 
     /// <summary>Call exactly once per render frame, before hotkeys and simulation ticks.</summary>
     public void Poll()
@@ -48,6 +67,30 @@ public sealed class KeyboardSampler
                 _pressedSinceLastTick |= button;
             }
         }
+
+        foreach ((KeyboardKey bound, InputButtons button) in Player2Bindings)
+        {
+            if (WasPressed(bound))
+            {
+                _p2PressedSinceLastTick |= button;
+            }
+        }
+    }
+
+    /// <summary>Player 2's input for one simulation tick (latched presses + held keys).</summary>
+    public FrameInput ConsumeTickPlayer2()
+    {
+        InputButtons held = _p2PressedSinceLastTick;
+        foreach ((KeyboardKey key, InputButtons button) in Player2Bindings)
+        {
+            if (Raylib.IsKeyDown(key))
+            {
+                held |= button;
+            }
+        }
+
+        _p2PressedSinceLastTick = InputButtons.None;
+        return new FrameInput(held);
     }
 
     /// <summary>True if the key went down during this render frame (including sub-frame taps).</summary>
@@ -71,5 +114,9 @@ public sealed class KeyboardSampler
     }
 
     /// <summary>Drops latched presses (used while gameplay is paused by the warning screen).</summary>
-    public void Clear() => _pressedSinceLastTick = InputButtons.None;
+    public void Clear()
+    {
+        _pressedSinceLastTick = InputButtons.None;
+        _p2PressedSinceLastTick = InputButtons.None;
+    }
 }

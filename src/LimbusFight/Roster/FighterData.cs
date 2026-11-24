@@ -265,6 +265,18 @@ public sealed class FighterData
 
     public string Name { get; set; } = "Training Box";
 
+    /// <summary>Which Sinner this is ("Yi Sang"...), so a look can be found in the player's files by name. Null for custom fighters.</summary>
+    public string? Sinner { get; set; }
+
+    /// <summary>The Identity shown under the name on the select screen ("LCB Sinner").</summary>
+    public string? Identity { get; set; }
+
+    /// <summary>Box colour when there is no look, "#RRGGBB".</summary>
+    public string? Color { get; set; }
+
+    /// <summary>Built-in fighters have a preset version; custom copies have 0.</summary>
+    public int Preset { get; set; }
+
     public BodyData Body { get; set; } = new();
 
     public MovementData Movement { get; set; } = new();
@@ -297,9 +309,17 @@ public sealed class FighterData
         return move;
     }
 
+    /// <summary>"#RRGGBB" -> 0xRRGGBB; 0 when missing or not a colour.</summary>
+    public static uint ParseRgb(string? hex)
+    {
+        string h = (hex ?? string.Empty).Trim().TrimStart('#');
+        return h.Length == 6 && uint.TryParse(h, System.Globalization.NumberStyles.HexNumber, null, out uint rgb) ? rgb : 0u;
+    }
+
     public FighterStats ToStats() => new()
     {
         Name = Name,
+        BodyRgb = ParseRgb(Color),
         HurtboxWidth = Body.HurtboxWidth,
         HurtboxHeight = Body.HurtboxHeight,
         PushboxWidth = Body.PushboxWidth,
@@ -328,6 +348,9 @@ public sealed class FighterData
     public void Sanitise()
     {
         Name = string.IsNullOrWhiteSpace(Name) ? "Fighter" : Name.Trim();
+        Sinner = string.IsNullOrWhiteSpace(Sinner) ? null : Sinner.Trim();
+        Identity = string.IsNullOrWhiteSpace(Identity) ? null : Identity.Trim();
+        Color = ParseRgb(Color) == 0 ? null : Color!.Trim();
         if (Name.Length > 40)
         {
             Name = Name[..40];

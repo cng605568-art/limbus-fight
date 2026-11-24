@@ -21,8 +21,8 @@ public static class ArenaRenderer
         DrawShadow(arena.Player1);
         DrawShadow(arena.Dummy);
 
-        DrawFighter(arena, arena.Dummy, Theme.DummyBody, Theme.DummyTrim, looks, LookSlot.Dummy);
-        DrawFighter(arena, arena.Player1, Theme.Player1Body, Theme.Player1Trim, looks, LookSlot.Player1);
+        DrawFighter(arena, arena.Dummy, BodyColor(arena.Dummy, Theme.DummyBody), Theme.DummyTrim, looks, LookSlot.Dummy);
+        DrawFighter(arena, arena.Player1, BodyColor(arena.Player1, Theme.Player1Body), Theme.Player1Trim, looks, LookSlot.Player1);
 
         if (looks is not null)
         {
@@ -173,9 +173,16 @@ public static class ArenaRenderer
     }
 
     /// <summary>"P1" / "DUMMY", plus the fighter's name once it has a real one.</summary>
+    /// <summary>The fighter file's box colour, else the slot's.</summary>
+    public static Color BodyColor(Fighter f, Color fallback)
+    {
+        uint rgb = f.Stats.BodyRgb;
+        return rgb == 0 ? fallback : new Color((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb, (byte)255);
+    }
+
     private static string Label(Fighter f)
     {
-        string tag = f.IsDummy ? "DUMMY" : "P1";
+        string tag = f.Name;
         return f.Stats.Name is "Player 1" or "Training Box" or "Training Dummy" ? tag : $"{tag}  {f.Stats.Name}";
     }
 

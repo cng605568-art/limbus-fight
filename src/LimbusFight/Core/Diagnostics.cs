@@ -129,7 +129,19 @@ public static class SelfTest
                 && defaults.Ego is { } ego && ego.SinCost.SequenceEqual(LimbusFight.Gameplay.AttackData.DefaultEgo.SinCost)
                 && defaults.Skill3?.Coins == LimbusFight.Gameplay.AttackData.DefaultSkill3.Coins;
             Console.WriteLine($"  fighter file        : {(fighterOk ? "ok" : "FAILED")}");
-            return jsonOk && cutOk && fighterOk;
+
+            // Built-in fighters: every preset is already within the clamps and survives a JSON round trip.
+            bool presetsOk = LimbusFight.Roster.Presets.All.Count > 0 && LimbusFight.Roster.Presets.All.All(p =>
+            {
+                var made = p.Make();
+                made.Sanitise();
+                string once = LimbusFight.Roster.FighterStore.Serialize(made);
+                var again = LimbusFight.Roster.FighterStore.Deserialize(once);
+                again.Sanitise();
+                return once == LimbusFight.Roster.FighterStore.Serialize(again) && made.ToStats().Ego is not null;
+            });
+            Console.WriteLine($"  built-in fighters   : {(presetsOk ? $"ok ({LimbusFight.Roster.Presets.All.Count})" : "FAILED")}");
+            return jsonOk && cutOk && fighterOk && presetsOk;
         }
         catch (Exception ex)
         {

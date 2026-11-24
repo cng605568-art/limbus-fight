@@ -193,8 +193,13 @@ public static class FighterStore
     /// First run of Step 4: creates the two default fighters. Looks made in Step 3 (looks\p1.json,
     /// looks\dummy.json) move into them, so nothing the player set up is lost.
     /// </summary>
+    /// <summary>Problem from writing the built-in fighters, if any.</summary>
+    public static string? PresetProblem { get; private set; }
+
     public static void EnsureDefaults()
     {
+        PresetProblem = Presets.EnsureWritten();
+
         if (!File.Exists(PathFor(DefaultPlayerId)))
         {
             var player = new FighterData { Name = "Player 1" };

@@ -76,7 +76,7 @@ public static class MatchHud
         }
 
         // Round banners: ROUND n / FIGHT at the start, K.O. / TIME and the winner at the end.
-        if (arena.Phase == RoundPhase.Over && arena.RoundResult is string result)
+        if (arena.Phase is RoundPhase.Over or RoundPhase.MatchOver && arena.RoundResult is string result)
         {
             Banner(result, width, Theme.Accent);
         }
@@ -98,7 +98,7 @@ public static class MatchHud
     private static void DrawSide(Fighter f, int x, bool mirrored, Color nameColor)
     {
         FighterStats stats = f.Stats;
-        string tag = f.IsDummy ? "DUMMY" : "P1";
+        string tag = f.Name;
         string name = stats.Name is "Player 1" or "Training Box" or "Training Dummy" ? tag : $"{tag}  {stats.Name}";
         int nameY = Top + 6;
         if (mirrored)
@@ -220,6 +220,33 @@ public static class MatchHud
         Color timeColor = seconds <= 10 ? Theme.Bad : Theme.Text;
         Ui.TextCentered(seconds.ToString(), width / 2, Top + 14, 44, timeColor);
         Ui.TextCentered($"ROUND {arena.RoundNumber}", width / 2, Top + 62, 18, Theme.TextDim);
-        Ui.TextCentered($"{arena.Player1Wins} - {arena.DummyWins}", width / 2, Top + 80, 18, Theme.Accent);
+        if (arena.RoundsToWin > 0)
+        {
+            // Round win pips: left for Player 1, right for Player 2.
+            for (int i = 0; i < arena.RoundsToWin; i++)
+            {
+                int lx = (width / 2) - 22 - (i * 20);
+                int rx = (width / 2) + 22 + (i * 20);
+                DrawPip(lx, Top + 92, i < arena.Player1Wins);
+                DrawPip(rx, Top + 92, i < arena.DummyWins);
+            }
+        }
+        else
+        {
+            Ui.TextCentered($"{arena.Player1Wins} - {arena.DummyWins}", width / 2, Top + 80, 18, Theme.Accent);
+        }
+    }
+
+    private static void DrawPip(int x, int y, bool won)
+    {
+        Raylib.DrawCircle(x, y, 7, new Color((byte)50, (byte)40, (byte)30, (byte)255));
+        if (won)
+        {
+            Raylib.DrawCircle(x, y, 6, Theme.Accent);
+        }
+        else
+        {
+            Raylib.DrawCircleLines(x, y, 6, Theme.PanelBorder);
+        }
     }
 }

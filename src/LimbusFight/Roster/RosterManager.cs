@@ -20,6 +20,7 @@ public sealed class RosterManager
     public RosterManager()
     {
         FighterStore.EnsureDefaults();
+        Problem = FighterStore.PresetProblem;
         _settings = FighterStore.LoadSettings();
         Load(LookSlot.Player1, _settings.Player1);
         Load(LookSlot.Dummy, _settings.Dummy);
@@ -39,6 +40,45 @@ public sealed class RosterManager
 
     public List<FighterEntry> List() => FighterStore.List();
 
+    /// <summary>Every fighter for the select screen: built-in Sinners first (in roster order), then the player's own.</summary>
+    public List<(string Id, FighterData Data)> ListForSelect()
+    {
+        var order = Presets.All.Select((p, i) => (p.Id, i)).ToDictionary(t => t.Id, t => t.i);
+        var all = new List<(string Id, FighterData Data)>();
+        foreach (FighterEntry e in List())
+        {
+            FighterData data = _slots.Values.FirstOrDefault(s => s.Id == e.Id).Data ?? FighterStore.Load(e.Id, out _);
+            all.Add((e.Id, data));
+        }
+
+        return all
+            .OrderBy(t => order.TryGetValue(t.Id, out int i) ? i : int.MaxValue)
+            .ThenBy(t => t.Id == FighterStore.DefaultDummyId ? 1 : 0)
+            .ThenBy(t => t.Data.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Saves a look into a fighter file that may not be in a slot (the auto roster); updates the slot if it is.</summary>
+    public void SetLookById(string id, LookData look)
+    {
+        foreach (LookSlot slot in _slots.Keys.ToList())
+        {
+            if (IdOf(slot) == id)
+            {
+                SetLook(slot, look);
+                RaiseChanged(slot);
+                return;
+            }
+        }
+
+        FighterData data = FighterStore.Load(id, out string? problem);
+        if (problem is null)
+        {
+            data.Look = look;
+            Problem = FighterStore.Save(id, data);
+        }
+    }
+
     /// <summary>True while the slot still has a starter fighter's name (so an auto look may name it).</summary>
     public bool HasDefaultName(LookSlot slot) => DefaultNames.Contains(Get(slot).Name);
 
@@ -47,6 +87,7 @@ public sealed class RosterManager
     {
         FighterData data = Get(slot);
         edit(data);
+        data.Preset = 0; // edited by the player: game updates no longer replace these numbers
         data.Sanitise();
         Save(slot);
         RaiseChanged(slot);

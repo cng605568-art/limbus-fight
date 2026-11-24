@@ -14,7 +14,24 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 6 (testing):** the first complete ID.
+**Step 7 (testing):** a real game around the fighting.
+
+- **Title screen, main menu, character select, pause menu (Esc) and a results card.**
+- **Versus:** two players on one keyboard, best of 3 (round pips under the timer).
+  Player 2 uses the arrows, Numpad 1 / 2 / 3 (or `,` `.` `/`) for skills, Numpad 0 or Right Shift
+  to defend and Numpad Enter (or `'`) for E.G.O.
+- **Training:** the old sandbox, now picked from the menu: choose your fighter, then the dummy.
+  F1, F2, F3, F4, F6 and R work here as before.
+- **Built-in Sinners:** Yi Sang, Faust, Don Quixote and Ryoshu, each with their own numbers, three
+  skills, an E.G.O (Crow's Eye View, Representation Emitter, La Sangre de Sancho, Forest for the
+  Flames), defense and passive. They are fighter files like any other (edit them in F2; an edited
+  one is never overwritten by game updates).
+- **Sinner looks by themselves:** on start the game looks through your Limbus files for sprites
+  named after each built-in Sinner (or their Identity number), builds an auto look from the best
+  file and saves it in the fighter file. Progress shows on the title, menu and select screens.
+  Fighters it cannot find keep a plain coloured box; F3 + Ctrl+A still makes a look by hand.
+
+**Step 6 (done):** the first complete ID.
 
 - **Skills 1-3 on J / K / L**, each its own move with frame data, hitbox, damage, type, Sin and
   statuses. **Coins** = hits: a 3-coin skill hits three times, a few frames apart.
@@ -127,7 +144,8 @@ LimbusFight/
 ├── THIRD-PARTY-NOTICES.md           licenses of bundled libraries
 └── src/LimbusFight/
     ├── LimbusFight.csproj
-    ├── Program.cs                   window, 60 FPS loop, scene switch
+    ├── Program.cs                   window setup, --selftest / --scan-assets
+    ├── GameApp.cs                   screens (title, menu, select, fight, tools), 60 FPS loop
     ├── Core/                        engine-independent services
     │   ├── SteamChecker.cs          Steam / Limbus Company detection + version gate constants
     │   ├── SteamCheckResult.cs      status object, StateFlags decoding
@@ -149,6 +167,8 @@ LimbusFight/
     ├── Roster/                      fighters as data (no Raylib types)
     │   ├── FighterData.cs           fighter file format: body, movement, moves, look
     │   ├── FighterStore.cs          load / save fighter files + roster.json, first-run defaults
+    │   ├── Presets.cs               the built-in Sinners (written to the fighters folder)
+    │   ├── AutoRoster.cs            finds each Sinner's sprites in the player's files, builds looks
     │   └── RosterManager.cs         which fighter is in each slot; switch, copy, rename, edit
     ├── Animation/                   looks: data files and clip choice (no Raylib types)
     │   ├── LookData.cs              look file format (clips of sprite references) + load/save
@@ -175,13 +195,20 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 
 ## Controls
 
+| Action | Player 1 | Player 2 |
+| --- | --- | --- |
+| walk | A / D | Left / Right |
+| jump | W | Up |
+| Skill 1 / 2 / 3 | J / K / L | Numpad 1 / 2 / 3 (or `,` `.` `/`) |
+| defend (guard, evade or counter) | S | Numpad 0 or Right Shift |
+| E.G.O | I | Numpad Enter (or `'`) |
+
+Menus: W / S or the arrows move, J or Enter chooses, K or Esc goes back. Esc pauses a match.
+
+Training only:
+
 | Key | Action |
 | --- | --- |
-| A / D | walk |
-| W | jump |
-| J / K / L | Skill 1 / 2 / 3 |
-| S | defend (guard, evade or counter) |
-| I | E.G.O |
 | R | restart the round |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
 | F2 | fighter editor (Tab P1 / Dummy, `[` `]` switch fighter, Ctrl+N new fighter, Enter on the name rename, Up/Down pick, Left/Right change, Shift bigger steps, Del reset value, Space play / pause, `,` `.` step frames) |
@@ -189,7 +216,7 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
 | F6 | dummy: stand still / fight back / defend |
 | F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |
-| ESC | quit |
+| Esc | pause (Resume, Restart, Character select, Controls, Main menu, Quit) |
 
 ## Version gate
 

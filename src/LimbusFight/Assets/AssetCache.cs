@@ -134,6 +134,16 @@ public sealed class AssetCache
     /// <summary>Writes the cache atomically (temp file, then replace).</summary>
     public void Save(string? path = null)
     {
+        lock (SaveLock) // the asset browser and the auto roster may both save
+        {
+            SaveCore(path);
+        }
+    }
+
+    private static readonly object SaveLock = new();
+
+    private void SaveCore(string? path)
+    {
         path ??= DefaultPath;
         string? folder = Path.GetDirectoryName(path);
         if (folder is not null)

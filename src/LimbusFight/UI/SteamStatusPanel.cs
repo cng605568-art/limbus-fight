@@ -26,7 +26,7 @@ public static class SteamStatusPanel
         x += 12 + Ui.Measure(label, font);
         x = Ui.LabelValue("buildid:", r.BuildIdDisplay, x + 24, 4, font, r.BuildId is null ? Theme.TextDim : Theme.Text);
         Ui.LabelValue("version check:", r.BypassVersionCheck ? "bypassed" : "on", x + 24, 4, font, r.BypassVersionCheck ? Theme.Warn : Theme.Good);
-        Ui.TextRight($"LIMBUS FIGHT  step 6 debug build  v{AppInfo.Version}", width - 10, 4, font, Theme.TextDim);
+        Ui.TextRight($"LIMBUS FIGHT  training  v{AppInfo.Version}", width - 10, 4, font, Theme.TextDim);
     }
 
     public static void Draw(SteamCheckResult r, int width)
@@ -39,7 +39,7 @@ public static class SteamStatusPanel
 
         // Row 0: title + build.
         Ui.Text("LIMBUS FIGHT", Margin, 12, 30, Theme.Accent);
-        Ui.Text("STEP 6  -  FIRST COMPLETE ID DEBUG BUILD", Margin + Ui.Measure("LIMBUS FIGHT", 30) + 18, 20, Font, Theme.TextDim);
+        Ui.Text("STEP 7  -  VERSUS + SELECT SCREEN", Margin + Ui.Measure("LIMBUS FIGHT", 30) + 18, 20, Font, Theme.TextDim);
         Ui.TextRight($"v{AppInfo.Version}", right, 20, Font, Theme.TextDim);
 
         // Row 1: found / missing + verdict, and the version gate mode on the right.

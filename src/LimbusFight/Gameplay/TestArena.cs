@@ -19,6 +19,9 @@ public enum RoundPhase
 
     /// <summary>Someone was knocked out or time ran out; the next round starts shortly.</summary>
     Over,
+
+    /// <summary>Someone won enough rounds: the match is over (versus, arcade).</summary>
+    MatchOver,
 }
 
 /// <summary>
@@ -94,16 +97,37 @@ public sealed class TestArena
     /// <summary>Recent combat events (newest last), for popups.</summary>
     public IReadOnlyList<CombatEvent> Events => _events;
 
-    /// <summary>Advances the match by exactly one 60 Hz frame.</summary>
-    public void Tick(FrameInput player1Input)
+    /// <summary>Rounds needed to win the match; 0 = endless rounds (training).</summary>
+    public int RoundsToWin { get; set; }
+
+    /// <summary>After <see cref="RoundPhase.MatchOver"/>: 1 = Player 1 won, -1 = Player 2, 0 = draw.</summary>
+    public int MatchWinner { get; private set; }
+
+    /// <summary>Starts a fresh match: round 1, no wins.</summary>
+    public void NewMatch()
+    {
+        Player1Wins = 0;
+        DummyWins = 0;
+        MatchWinner = 0;
+        StartRound(1);
+    }
+
+    /// <summary>Advances one frame with Player 2 controlled from outside (a second player or the CPU).</summary>
+    public void Tick(FrameInput player1Input, FrameInput player2Input) => TickCore(player1Input, player2Input);
+
+    /// <summary>Advances the match by exactly one 60 Hz frame; the dummy decides what Player 2 does.</summary>
+    public void Tick(FrameInput player1Input) => TickCore(player1Input, null);
+
+    private void TickCore(FrameInput player1Input, FrameInput? player2Input)
     {
         Frame++;
         PhaseFrames++;
 
-        if (Phase == RoundPhase.Over)
+        if (Phase is RoundPhase.Over or RoundPhase.MatchOver)
         {
             player1Input = FrameInput.None;
-            if (PhaseFrames >= CombatRules.RoundEndFrames)
+            player2Input = FrameInput.None;
+            if (Phase == RoundPhase.Over && PhaseFrames >= CombatRules.RoundEndFrames)
             {
                 StartRound(RoundNumber + 1);
                 return;
@@ -112,7 +136,7 @@ public sealed class TestArena
 
         bool frozen = HitstopRemaining > 0;
         Player1.ReadInput(player1Input, frozen);
-        Dummy.ReadInput(DummyInput(), frozen);
+        Dummy.ReadInput(player2Input ?? DummyInput(), frozen);
 
         if (frozen)
         {
@@ -227,8 +251,14 @@ public sealed class TestArena
             DummyWins++;
         }
 
-        string who = winner > 0 ? "P1 WINS" : winner < 0 ? "DUMMY WINS" : "DRAW";
+        string who = winner > 0 ? $"{Player1.Name} WINS" : winner < 0 ? $"{Dummy.Name} WINS" : "DRAW";
         RoundResult = $"{how}  {who}";
+
+        if (RoundsToWin > 0 && (Player1Wins >= RoundsToWin || DummyWins >= RoundsToWin))
+        {
+            Phase = RoundPhase.MatchOver;
+            MatchWinner = Player1Wins > DummyWins ? 1 : DummyWins > Player1Wins ? -1 : 0;
+        }
     }
 
     // =========================================================================================
@@ -351,7 +381,7 @@ public sealed class TestArena
         Fighter winner = p1Wins ? Player1 : Dummy;
         Fighter loser = p1Wins ? Dummy : Player1;
         loser.EnterClashRecoil(CombatRules.ClashLoserRecoil, CombatRules.ClashPushback);
-        Emit(CombatEventKind.Clash, x, y, $"CLASH! {(p1Wins ? "P1" : "DUMMY")} wins {MathF.Max(p1Power, dummyPower):0.#}-{MathF.Min(p1Power, dummyPower):0.#}", p1Wins);
+        Emit(CombatEventKind.Clash, x, y, $"CLASH! {(p1Wins ? Player1.Name : Dummy.Name)} wins {MathF.Max(p1Power, dummyPower):0.#}-{MathF.Min(p1Power, dummyPower):0.#}", p1Wins);
 
         if (winner.AddSanity(CombatRules.SanityOnClashWon))
         {
