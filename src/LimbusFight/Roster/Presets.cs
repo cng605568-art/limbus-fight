@@ -12,7 +12,7 @@ namespace LimbusFight.Roster;
 public static class Presets
 {
     /// <summary>Bump when preset numbers change so existing (unedited) preset files get refreshed.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     public sealed record Preset(string Id, Func<FighterData> Make);
 
@@ -22,6 +22,7 @@ public static class Presets
         new("faust", Faust),
         new("don-quixote", DonQuixote),
         new("ryoshu", Ryoshu),
+        new("vergilius", Vergilius),
     };
 
     /// <summary>Writes missing preset files and refreshes outdated unedited ones. Returns problems, if any.</summary>
@@ -57,7 +58,7 @@ public static class Presets
     private static FighterData YiSang()
     {
         FighterData f = Base("Yi Sang", "#3E6FB5");
-        f.Combat.MaxHp = 100;
+        f.Combat.MaxHp = 180;
         f.Combat.StaggerMax = 40;
         f.Combat.PierceResist = 0.75f;
         f.Combat.BluntResist = 1.5f;
@@ -79,7 +80,7 @@ public static class Presets
     private static FighterData Faust()
     {
         FighterData f = Base("Faust", "#C9A93E");
-        f.Combat.MaxHp = 115;
+        f.Combat.MaxHp = 205;
         f.Combat.StaggerMax = 52;
         f.Combat.BluntResist = 0.75f;
         f.Combat.SlashResist = 1.25f;
@@ -104,7 +105,7 @@ public static class Presets
     private static FighterData DonQuixote()
     {
         FighterData f = Base("Don Quixote", "#E0D05A");
-        f.Combat.MaxHp = 92;
+        f.Combat.MaxHp = 165;
         f.Combat.StaggerMax = 38;
         f.Combat.PierceResist = 0.75f;
         f.Combat.SlashResist = 1.5f;
@@ -130,7 +131,7 @@ public static class Presets
     private static FighterData Ryoshu()
     {
         FighterData f = Base("Ryoshu", "#B8322E");
-        f.Combat.MaxHp = 96;
+        f.Combat.MaxHp = 172;
         f.Combat.StaggerMax = 36;
         f.Combat.SlashResist = 0.75f;
         f.Combat.PierceResist = 1.5f;
@@ -148,6 +149,51 @@ public static class Presets
             Ego("Forest for the Flames", "TETH", Sin.Wrath, 4, 15, 4, 24, dmg: 14, stagger: 10, clash: 26, DamageType.Slash, Sin.Wrath, reach: 165,
                 coins: 3, interval: 6, onHit: new[] { S(StatusKind.Burn, 3, 3) }),
         };
+        return f;
+    }
+
+    // ---- Bosses -----------------------------------------------------------------------------
+
+    private static FighterData Vergilius()
+    {
+        var f = new FighterData
+        {
+            Name = "Vergilius",
+            Identity = "BOSS - The Red Gaze",
+            Color = "#8E1B1F",
+            LookSearch = "vergilius",
+        };
+        f.Boss = new BossData { Armor = ArmorKind.Attacks, DrawScale = 1.45f, Phase2HpPercent = 50, Phase2DamagePercent = 25, Phase2ClashBonus = 4 };
+        f.Combat.MaxHp = 300;
+        f.Combat.StaggerMax = 120;
+        f.Combat.SlashResist = 1f;
+        f.Combat.PierceResist = 1f;
+        f.Combat.BluntResist = 1.25f;
+        f.Body = new BodyData { HurtboxWidth = 118, HurtboxHeight = 270, PushboxWidth = 100, PushboxHeight = 250 };
+        f.Movement.WalkForwardSpeed = 2.9f;
+        f.Movement.WalkBackwardSpeed = 2.4f;
+        f.Movement.JumpLaunchSpeed = 17f;
+        f.Movement.JumpForwardSpeed = 3.6f;
+        f.Movement.JumpSquatFrames = 6;
+        f.Movement.LandingFrames = 6;
+        f.Defense = new DefenseData { Kind = DefenseKind.Guard, GuardDamage = 0.2f, GuardStagger = 0.6f };
+        f.Passive = new PassiveData { Kind = PassiveKind.Composure, Value = 2 };
+        f.Moves = new()
+        {
+            M("punch", "Red Slash", 13, 4, 20, hitstun: 14, dmg: 7, stagger: 4, clash: 11, DamageType.Slash, Sin.Wrath, reach: 150, y: -170, h: 60),
+            M("skill2", "Gaze Thrust", 18, 5, 25, hitstun: 18, dmg: 9, stagger: 6, clash: 13, DamageType.Pierce, Sin.Pride, reach: 180, y: -165, h: 50,
+                onHit: new[] { S(StatusKind.Bleed, 2, 2) }),
+            M("skill3", "Crimson Flurry", 22, 0, 30, hitstun: 18, dmg: 5, stagger: 3, clash: 16, DamageType.Slash, Sin.Lust, reach: 170, y: -180, h: 80,
+                coins: 3, interval: 6),
+            Ego("The Red Gaze", "BOSS", Sin.Wrath, 5, 22, 4, 32, dmg: 12, stagger: 8, clash: 26, DamageType.Slash, Sin.Wrath, reach: 220,
+                coins: 3, interval: 7, onHit: new[] { S(StatusKind.Bleed, 2, 2) }),
+        };
+        foreach (MoveData m in f.Moves.Where(m => m.Button == "ego"))
+        {
+            m.Hitbox.Y = -190;
+            m.Hitbox.Height = 120;
+        }
+
         return f;
     }
 
@@ -171,7 +217,7 @@ public static class Presets
     public static MoveData M(
         string button, string name, int startup, int active, int recovery, int hitstun, int dmg, int stagger, float clash,
         DamageType type, Sin sin, float reach = 118, int coins = 1, int interval = 4, float pushback = 7,
-        StatusData[]? onHit = null, StatusData[]? selfOnHit = null, int hitstop = 0)
+        StatusData[]? onHit = null, StatusData[]? selfOnHit = null, int hitstop = 0, float y = float.NaN, float h = float.NaN)
     {
         MoveData m = MoveData.Default(button);
         m.Id = button;
@@ -192,6 +238,15 @@ public static class Presets
         float start = m.Hitbox.X;
         m.Hitbox.Width = Math.Max(24, reach - start);
         m.ArmHurtboxWidth = Math.Max(0, m.Hitbox.Width - 16);
+        if (!float.IsNaN(y))
+        {
+            m.Hitbox.Y = y;
+        }
+
+        if (!float.IsNaN(h))
+        {
+            m.Hitbox.Height = h;
+        }
         m.OnHit = (onHit ?? Array.Empty<StatusData>()).ToList();
         m.SelfOnHit = (selfOnHit ?? Array.Empty<StatusData>()).ToList();
         return m;

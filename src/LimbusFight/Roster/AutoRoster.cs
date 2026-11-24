@@ -43,8 +43,8 @@ public sealed class AutoRoster : IDisposable
         }
 
         List<(string Id, string Sinner)> wanted = _roster.ListForSelect()
-            .Where(t => t.Data.Sinner is not null && t.Data.Look.IsEmpty)
-            .Select(t => (t.Id, t.Data.Sinner!))
+            .Where(t => (t.Data.Sinner ?? t.Data.LookSearch) is not null && t.Data.Look.IsEmpty)
+            .Select(t => (t.Id, (t.Data.Sinner ?? t.Data.LookSearch)!))
             .ToList();
         if (wanted.Count == 0)
         {
@@ -230,17 +230,18 @@ public sealed class AutoRoster : IDisposable
         return best;
     }
 
-    /// <summary>How strongly a file's sprite names point at a Sinner: names with the Sinner's name or Identity number.</summary>
+    /// <summary>How strongly a file's sprite names point at a Sinner (name or Identity number) or another fighter (its search word).</summary>
     public static int ScoreNames(string sinner, IEnumerable<AssetName> names)
     {
         int index = Array.FindIndex(AutoLook.SinnerNames, n => n.Equals(sinner, StringComparison.OrdinalIgnoreCase));
-        if (index < 0)
+        string word = index >= 0 ? AutoLook.SinnerWords[index] : new string(sinner.ToLowerInvariant().Where(char.IsLetter).ToArray());
+        if (word.Length < 3)
         {
             return 0;
         }
 
-        string word = AutoLook.SinnerWords[index];
-        string number = $"1{index + 1:00}"; // Identity ids: 101xx = Yi Sang, 102xx = Faust ... 112xx = Gregor
+        // Identity ids: 101xx = Yi Sang, 102xx = Faust ... 112xx = Gregor. Other fighters have none.
+        string number = index >= 0 ? $"1{index + 1:00}" : "\0\0\0";
         int score = 0;
         foreach (AssetName name in names)
         {
@@ -309,7 +310,8 @@ public sealed class AutoRoster : IDisposable
             rating -= 25;
         }
 
-        if (result.Character is string character)
+        bool isSinner = AutoLook.SinnerNames.Any(n => n.Equals(sinner, StringComparison.OrdinalIgnoreCase));
+        if (isSinner && result.Character is string character)
         {
             rating += character.Equals(sinner, StringComparison.OrdinalIgnoreCase) ? 15 : -100;
         }

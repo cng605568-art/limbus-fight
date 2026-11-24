@@ -209,9 +209,13 @@ public sealed class LookManager : IDisposable
             return false;
         }
 
-        Color tint = flash ? new Color((byte)255, (byte)160, (byte)160, (byte)255) : Color.White;
+        Color tint = flash ? new Color((byte)255, (byte)160, (byte)160, (byte)255)
+            : fighter.ArmorFlash > 0 ? new Color((byte)200, (byte)205, (byte)225, (byte)255)
+            : fighter.InPhase2 ? new Color((byte)255, (byte)215, (byte)205, (byte)255)
+            : Color.White;
+        float size = fighter.Stats.Boss?.DrawScale ?? 1f;
         LookFrame frame = data.Frames(clip)[index];
-        if (DrawPicture(slot, frame, fighter.X + shake, fighter.Y, fighter.Facing, tint))
+        if (DrawPicture(slot, frame, fighter.X + shake, fighter.Y, fighter.Facing, tint, size))
         {
             return true;
         }
@@ -219,7 +223,7 @@ public sealed class LookManager : IDisposable
         // That picture is still loading or failed: show any pose of the look that is ready.
         foreach (LookFrame other in data.Frames(ClipId.Idle).Concat(data.PoseFrames))
         {
-            if (DrawPicture(slot, other, fighter.X + shake, fighter.Y, fighter.Facing, tint))
+            if (DrawPicture(slot, other, fighter.X + shake, fighter.Y, fighter.Facing, tint, size))
             {
                 return true;
             }

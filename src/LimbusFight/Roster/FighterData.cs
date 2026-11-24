@@ -87,6 +87,30 @@ public sealed class DefenseData
     };
 }
 
+/// <summary>Boss rules (Step 9), as written in the fighter file.</summary>
+public sealed class BossData
+{
+    public bool Enabled { get; set; } = true;
+
+    public ArmorKind Armor { get; set; } = ArmorKind.Attacks;
+
+    public float ArmorDamage { get; set; } = 1f;
+
+    public float DrawScale { get; set; } = 1.4f;
+
+    public int Phase2HpPercent { get; set; } = 50;
+
+    public int Phase2DamagePercent { get; set; } = 20;
+
+    public float Phase2ClashBonus { get; set; } = 3f;
+
+    public BossStats ToStats() => new()
+    {
+        Armor = Armor, ArmorDamage = ArmorDamage, DrawScale = DrawScale,
+        Phase2HpPercent = Phase2HpPercent, Phase2DamagePercent = Phase2DamagePercent, Phase2ClashBonus = Phase2ClashBonus,
+    };
+}
+
 /// <summary>The always-on passive (Step 6).</summary>
 public sealed class PassiveData
 {
@@ -277,8 +301,15 @@ public sealed class FighterData
     /// <summary>Built-in fighters have a preset version; custom copies have 0.</summary>
     public int Preset { get; set; }
 
-    /// <summary>A Boss: fought at the end of Arcade and in Boss Rush (Step 9 adds its rules).</summary>
-    public bool IsBoss { get; set; }
+    /// <summary>Boss rules: super armor, size, phase 2. Null (left out of the file) for normal fighters.</summary>
+    public BossData? Boss { get; set; }
+
+    /// <summary>A Boss: fought at the end of Arcade and in Boss Rush.</summary>
+    [JsonIgnore]
+    public bool IsBoss => Boss is { Enabled: true };
+
+    /// <summary>Words to find this fighter's sprites by name in the player's files (Bosses, other IDs), e.g. "vergilius".</summary>
+    public string? LookSearch { get; set; }
 
     public BodyData Body { get; set; } = new();
 
@@ -345,6 +376,7 @@ public sealed class FighterData
         Ego = Move("ego") is { Enabled: true } eg ? eg.ToAttack() : null,
         Defense = Defense.ToStats(),
         Passive = Passive.ToStats(),
+        Boss = Boss is { Enabled: true } b ? b.ToStats() : null,
     };
 
     /// <summary>Clamps every number to a playable range (hand-edited files, typos).</summary>
@@ -440,6 +472,17 @@ public sealed class FighterData
             _ = Move(button);
         }
 
+        if (Boss is not null)
+        {
+            Boss.Armor = Enum.IsDefined(Boss.Armor) ? Boss.Armor : ArmorKind.Attacks;
+            Boss.ArmorDamage = Clamp(Boss.ArmorDamage, 0, 2, 1);
+            Boss.DrawScale = Clamp(Boss.DrawScale, 0.5f, 3, 1.4f);
+            Boss.Phase2HpPercent = Math.Clamp(Boss.Phase2HpPercent, 0, 99);
+            Boss.Phase2DamagePercent = Math.Clamp(Boss.Phase2DamagePercent, 0, 300);
+            Boss.Phase2ClashBonus = Clamp(Boss.Phase2ClashBonus, 0, 50, 3);
+        }
+
+        LookSearch = string.IsNullOrWhiteSpace(LookSearch) ? null : LookSearch.Trim();
         Defense ??= new DefenseData();
         Defense.Kind = Enum.IsDefined(Defense.Kind) ? Defense.Kind : DefenseKind.Guard;
         Defense.GuardDamage = Clamp(Defense.GuardDamage, 0, 1, 0.25f);

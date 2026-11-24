@@ -62,6 +62,8 @@ public static class MatchHud
                 CombatEventKind.Crit => (24, new Color((byte)255, (byte)240, (byte)160, (byte)255)),
                 CombatEventKind.Ego => (34, new Color((byte)255, (byte)90, (byte)70, (byte)255)),
                 CombatEventKind.Counter => (32, new Color((byte)120, (byte)230, (byte)255, (byte)255)),
+                CombatEventKind.Armor => (20, new Color((byte)200, (byte)200, (byte)210, (byte)255)),
+                CombatEventKind.Enrage => (40, new Color((byte)255, (byte)60, (byte)50, (byte)255)),
                 CombatEventKind.Guard => (20, new Color((byte)150, (byte)190, (byte)255, (byte)255)),
                 CombatEventKind.Charge => (20, new Color((byte)120, (byte)200, (byte)255, (byte)255)),
                 CombatEventKind.StatusDamage => (20, new Color((byte)255, (byte)150, (byte)90, (byte)255)),

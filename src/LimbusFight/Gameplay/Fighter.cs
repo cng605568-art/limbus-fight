@@ -152,6 +152,11 @@ public sealed class Fighter
     /// <summary>Advances the state machine and physics by one frame. Skipped during hitstop.</summary>
     public void Update()
     {
+        if (ArmorFlash > 0)
+        {
+            ArmorFlash--;
+        }
+
         StateFrame++;
         StartedAttack = false;
         StartedEgo = false;
@@ -304,6 +309,8 @@ public sealed class Fighter
     {
         Hp = Stats.MaxHp;
         Stagger = Stats.StaggerMax;
+        InPhase2 = false;
+        ArmorFlash = 0;
         Sanity = 0;
         PanicRemaining = 0;
         CritMeter = 0;
@@ -331,6 +338,27 @@ public sealed class Fighter
 
         CoinsLanded++;
         PushbackVelocity = -Facing * CurrentAttack.Pushback;
+    }
+
+    /// <summary>Boss: true once its health fell below the phase 2 line this round.</summary>
+    public bool InPhase2 { get; set; }
+
+    /// <summary>Frames left of the "armor took that hit" flash.</summary>
+    public int ArmorFlash { get; private set; }
+
+    /// <summary>True if a hit right now would be absorbed by super armor.</summary>
+    public bool HasArmorNow => Stats.Boss is { } boss && State is not (FighterState.Staggered or FighterState.Down) && boss.Armor switch
+    {
+        ArmorKind.Always => true,
+        ArmorKind.Attacks => State == FighterState.Attack && CurrentAttack is { } a && StateFrame <= a.Startup + a.Active,
+        _ => false,
+    };
+
+    /// <summary>Hit through super armor: counts as a hit, but the fighter keeps doing what it was doing.</summary>
+    public void TakeArmoredHit()
+    {
+        HitsTaken++;
+        ArmorFlash = 8;
     }
 
     /// <summary>Called by the arena when this fighter is hit.</summary>

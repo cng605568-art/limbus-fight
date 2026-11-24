@@ -60,6 +60,12 @@ public enum CombatEventKind
     Counter,
     Guard,
     Charge,
+
+    /// <summary>A Boss's super armor took a hit.</summary>
+    Armor,
+
+    /// <summary>A Boss entered its second phase.</summary>
+    Enrage,
 }
 
 public sealed record CombatEvent(long Frame, CombatEventKind Kind, float X, float Y, string Text, bool FromPlayer1);

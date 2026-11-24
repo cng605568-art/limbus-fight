@@ -78,6 +78,13 @@ public sealed class ArcadeLadder
         return new ArcadeLadder(playerId, opponents, level);
     }
 
+    /// <summary>Boss Rush: every Boss (except the player's own fighter), in roster order.</summary>
+    public static ArcadeLadder BuildBossRush(string playerId, IReadOnlyList<(string Id, FighterData Data)> all, CpuLevel level) =>
+        new(playerId, all.Where(t => t.Data.IsBoss && t.Id != playerId).Select(t => t.Id).ToList(), level) { IsBossRush = true };
+
+    /// <summary>True for a Boss Rush (single rounds, Bosses only).</summary>
+    public bool IsBossRush { get; private init; }
+
     private static void Shuffle(List<string> items, uint seed)
     {
         uint s = seed == 0 ? 0x2545F491u : seed;

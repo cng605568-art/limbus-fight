@@ -38,6 +38,9 @@ public enum GameMode
 
     /// <summary>Player 1 against a row of CPU opponents.</summary>
     Arcade,
+
+    /// <summary>Player 1 against every Boss in a row, one round each.</summary>
+    BossRush,
 }
 
 /// <summary>Fighter tools that take over the screen.</summary>
@@ -147,6 +150,7 @@ public sealed class GameApp
             new MenuList.Item("Arcade", "Beat a row of CPU opponents with one fighter."),
             new MenuList.Item("Versus", "Two players on one keyboard."),
             new MenuList.Item("Versus CPU", "One match against the computer."),
+            new MenuList.Item("Boss Rush", "Every Boss in a row, one round each."),
             new MenuList.Item("Training", "Practise against the dummy. Esc for training options."),
             new MenuList.Item("Options", "CPU level, rounds, round time, fullscreen, window size."),
             new MenuList.Item("Controls", "Keys for both players."),
@@ -317,6 +321,9 @@ public sealed class GameApp
             case "Versus CPU":
                 OpenSelect(GameMode.VersusCpu);
                 break;
+            case "Boss Rush":
+                OpenSelect(GameMode.BossRush);
+                break;
             case "Training":
                 OpenSelect(GameMode.Training);
                 break;
@@ -458,7 +465,7 @@ public sealed class GameApp
     private void OpenSelect(GameMode mode)
     {
         _mode = mode;
-        _select.OwnFighterOnly = mode == GameMode.Arcade;
+        _select.OwnFighterOnly = mode is GameMode.Arcade or GameMode.BossRush;
         switch (mode)
         {
             case GameMode.Versus:
@@ -469,6 +476,9 @@ public sealed class GameApp
                 break;
             case GameMode.Arcade:
                 _select.Open(twoPlayers: false, "ARCADE", "CPU");
+                break;
+            case GameMode.BossRush:
+                _select.Open(twoPlayers: false, "BOSS RUSH", "CPU");
                 break;
             default:
                 _select.Open(twoPlayers: false, "TRAINING", "DUMMY");
@@ -487,8 +497,18 @@ public sealed class GameApp
             case SelectScreen.Result.Back:
                 _screen = AppScreen.Menu;
                 break;
-            case SelectScreen.Result.Start when _mode == GameMode.Arcade:
-                _ladder = ArcadeLadder.Build(_roster.IdOf(LookSlot.Player1), _roster.ListForSelect(), NextSeed(), _settings.CpuLevel);
+            case SelectScreen.Result.Start when IsLadder:
+                string me = _roster.IdOf(LookSlot.Player1);
+                _ladder = _mode == GameMode.BossRush
+                    ? ArcadeLadder.BuildBossRush(me, _roster.ListForSelect(), _settings.CpuLevel)
+                    : ArcadeLadder.Build(me, _roster.ListForSelect(), NextSeed(), _settings.CpuLevel);
+                if (_ladder.IsEmpty)
+                {
+                    _notice = "There are no Bosses to fight (they may have been deleted from the fighters folder).";
+                    _screen = AppScreen.Menu;
+                    break;
+                }
+
                 BeginArcadeStage();
                 break;
             case SelectScreen.Result.Start:
@@ -496,6 +516,8 @@ public sealed class GameApp
                 break;
         }
     }
+
+    private bool IsLadder => _mode is GameMode.Arcade or GameMode.BossRush;
 
     private uint NextSeed() => unchecked((uint)Environment.TickCount * 2654435761u) ^ ++_matchCount;
 
@@ -529,10 +551,11 @@ public sealed class GameApp
                 break;
             case GameMode.VersusCpu:
             case GameMode.Arcade:
-                _arena.Dummy.Name = "CPU";
+            case GameMode.BossRush:
+                _arena.Dummy.Name = _arena.Dummy.Stats.IsBoss ? "BOSS" : "CPU";
                 _arena.DummyMode = DummyMode.Cpu;
-                _arena.Cpu.Level = _mode == GameMode.Arcade && _ladder is not null ? _ladder.Level : _settings.CpuLevel;
-                _arena.RoundsToWin = _settings.RoundsToWin;
+                _arena.Cpu.Level = IsLadder && _ladder is not null ? _ladder.Level : _settings.CpuLevel;
+                _arena.RoundsToWin = _mode == GameMode.BossRush ? 1 : _settings.RoundsToWin;
                 _arena.RoundLengthFrames = _settings.RoundFrames;
                 break;
             default:
@@ -707,7 +730,7 @@ public sealed class GameApp
             items.Add(new MenuList.Item("Restart match"));
         }
 
-        items.Add(new MenuList.Item(_mode == GameMode.Arcade ? "Give up" : "Character select"));
+        items.Add(new MenuList.Item(IsLadder ? "Give up" : "Character select"));
         items.Add(new MenuList.Item("Controls"));
         items.Add(new MenuList.Item("Main menu"));
         items.Add(new MenuList.Item("Quit game"));
@@ -785,7 +808,7 @@ public sealed class GameApp
     private void OpenResults()
     {
         _resultsOpen = true;
-        if (_mode == GameMode.Arcade && _ladder is not null)
+        if (IsLadder && _ladder is not null)
         {
             if (_arena.MatchWinner > 0)
             {
@@ -934,8 +957,8 @@ public sealed class GameApp
 
             case AppScreen.Intro:
                 VersusIntro.Draw(VirtualWidth, VirtualHeight, _introFrames, _roster.Get(LookSlot.Player1), _roster.Get(LookSlot.Dummy),
-                    _mode == GameMode.Arcade ? _ladder?.StageLabel : _mode == GameMode.VersusCpu ? $"CPU: {GameSettings.Describe(_arena.Cpu.Level)}" : null,
-                    _mode == GameMode.Arcade ? $"CPU {GameSettings.Describe(_arena.Cpu.Level)}" : null);
+                    IsLadder ? _ladder?.StageLabel : _mode == GameMode.VersusCpu ? $"CPU: {GameSettings.Describe(_arena.Cpu.Level)}" : null,
+                    IsLadder ? $"CPU {GameSettings.Describe(_arena.Cpu.Level)}" : null);
                 break;
 
             case AppScreen.ArcadeClear:
@@ -979,8 +1002,9 @@ public sealed class GameApp
     {
         MenuArt.Background(VirtualWidth, VirtualHeight, Raylib.GetTime());
         FighterData p1 = _roster.Get(LookSlot.Player1);
-        Ui.TextCentered("ARCADE CLEAR", (VirtualWidth / 2) + 5, 165, 96, new Color((byte)60, (byte)8, (byte)12, (byte)255));
-        Ui.TextCentered("ARCADE CLEAR", VirtualWidth / 2, 160, 96, Theme.Accent);
+        string title = _ladder?.IsBossRush == true ? "BOSS RUSH CLEAR" : "ARCADE CLEAR";
+        Ui.TextCentered(title, (VirtualWidth / 2) + 5, 165, 88, new Color((byte)60, (byte)8, (byte)12, (byte)255));
+        Ui.TextCentered(title, VirtualWidth / 2, 160, 88, Theme.Accent);
         Ui.TextCentered(p1.Name.ToUpperInvariant(), VirtualWidth / 2, 290, 48, Theme.Text);
         if (_ladder is not null)
         {
@@ -1018,7 +1042,7 @@ public sealed class GameApp
         }
         else
         {
-            string left = _mode == GameMode.Arcade && _ladder is not null ? $"{_ladder.StageLabel}   " : string.Empty;
+            string left = IsLadder && _ladder is not null ? $"{_ladder.StageLabel}   " : string.Empty;
             string cpu = _arena.DummyMode == DummyMode.Cpu ? $"CPU {GameSettings.Describe(_arena.Cpu.Level)}   " : string.Empty;
             Ui.TextCentered($"{left}{cpu}Esc pause", VirtualWidth / 2, VirtualHeight - 30, 18, Theme.TextDim);
         }
@@ -1030,7 +1054,7 @@ public sealed class GameApp
             string side = winner > 0 ? _arena.Player1.Name : _arena.Dummy.Name;
             string headline = winner == 0 ? "DRAW" : $"{name.ToUpperInvariant()} WINS";
             string? sub = winner == 0 ? null : $"{side} takes the match";
-            if (_mode == GameMode.Arcade && _ladder is not null)
+            if (IsLadder && _ladder is not null)
             {
                 sub = winner > 0 ? $"{_ladder.StageLabel} cleared" : "Try again?";
             }

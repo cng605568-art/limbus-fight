@@ -14,7 +14,18 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 8 (testing):** playing alone.
+**Step 9 (testing):** Bosses.
+
+- **Boss rules** (a `boss` block in the fighter file, editable in F2 under BOSS): **super armor**
+  (hits during its wind-up and active frames hurt but do not interrupt; breaking its Stagger bar
+  removes the armor), drawn bigger, and an **enraged phase 2** below half health (+damage, +clash
+  power, ENRAGED banner). Bosses have more health, a bigger body, and are slower.
+- **First Boss: Vergilius, the Red Gaze** (fan-made moves). The CPU boss beats a Normal CPU
+  Sinner about 7 times in 8, in fights of about 25 seconds, so a careful player can win.
+- **Boss Rush:** every Boss in a row, one round each. Arcade now ends with the Bosses.
+- Built-in Sinners have more health (about 170-200), so rounds last longer.
+
+**Step 8 (done):** playing alone.
 
 - **CPU opponent** in three levels (Easy, Normal, Hard): walks to the range its skills reach,
   attacks, punishes whiffs and Staggers, defends on reaction (Hard reacts fast and often, Easy

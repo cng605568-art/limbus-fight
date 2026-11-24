@@ -487,7 +487,7 @@ public sealed class SelectScreen
         Raylib.DrawRectangle(x, y, 8, h, strip);
         Ui.Text(Ui.FitEnd(data.Name, 20, w - 20), x + 14, y + 10, 20, Theme.Text);
         string sub = data.Identity ?? (data.Sinner is null ? "custom fighter" : string.Empty);
-        Ui.Text(Ui.FitEnd(sub, 14, w - 20), x + 14, y + 36, 14, Theme.TextDim);
+        Ui.Text(Ui.FitEnd(sub, 14, w - 20), x + 14, y + 36, 14, data.IsBoss ? new Color((byte)230, (byte)90, (byte)80, (byte)255) : Theme.TextDim);
         if (!data.Look.IsEmpty)
         {
             Raylib.DrawCircle(x + w - 12, y + 12, 4, Theme.Good);

@@ -548,6 +548,17 @@ public sealed class TestArena
             damage *= CombatRules.PanicDamageMultiplier;
         }
 
+        if (attacker.InPhase2 && attacker.Stats.Boss is { } enraged)
+        {
+            damage *= 1f + (enraged.Phase2DamagePercent / 100f);
+        }
+
+        bool armored = defender.HasArmorNow;
+        if (armored)
+        {
+            damage *= defender.Stats.Boss!.ArmorDamage;
+        }
+
         if (defender.State == FighterState.Staggered)
         {
             damage *= CombatRules.StaggeredDamageMultiplier;
@@ -605,9 +616,19 @@ public sealed class TestArena
         }
 
         attacker.OnAttackConnected();
-        defender.TakeHit(attack);
+        if (armored)
+        {
+            defender.TakeArmoredHit();
+            Emit(CombatEventKind.Armor, point.X, point.Y - 34f, "ARMOR", byP1);
+        }
+        else
+        {
+            defender.TakeHit(attack);
+        }
 
-        HitstopRemaining = attack.Hitstop;
+        CheckPhase2(defender);
+
+        HitstopRemaining = armored ? Math.Max(2, attack.Hitstop / 2) : attack.Hitstop;
         TotalHits++;
         LastHitFrame = Frame;
         LastHitPoint = point;
@@ -633,7 +654,21 @@ public sealed class TestArena
     }
 
     private static float PassiveClashBonus(Fighter f) =>
-        f.Stats.Passive.Kind == PassiveKind.ClashPower ? f.Stats.Passive.Value : 0f;
+        (f.Stats.Passive.Kind == PassiveKind.ClashPower ? f.Stats.Passive.Value : 0f)
+        + (f.InPhase2 && f.Stats.Boss is { } boss ? boss.Phase2ClashBonus : 0f);
+
+    /// <summary>A Boss below its phase 2 line becomes enraged (once per round).</summary>
+    private void CheckPhase2(Fighter f)
+    {
+        if (f.Stats.Boss is not { Phase2HpPercent: > 0 } boss || f.InPhase2 || f.Hp <= 0
+            || f.Hp * 100 > f.Stats.MaxHp * boss.Phase2HpPercent)
+        {
+            return;
+        }
+
+        f.InPhase2 = true;
+        Emit(CombatEventKind.Enrage, f.X, f.Y - f.Stats.HurtboxHeight - 20f, "ENRAGED", f == Player1);
+    }
 
     private static float SturdyFactor(Fighter f) =>
         f.Stats.Passive.Kind == PassiveKind.Sturdy ? Math.Clamp(1f - (f.Stats.Passive.Value / 100f), 0f, 1f) : 1f;
@@ -665,6 +700,7 @@ public sealed class TestArena
         {
             fighter.Hp = Math.Max(0, fighter.Hp - bleed);
             Emit(CombatEventKind.StatusDamage, fighter.X, fighter.Y - fighter.Stats.HurtboxHeight, $"Bleed -{bleed}", fighter == Player1);
+            CheckPhase2(fighter);
         }
     }
 
@@ -686,6 +722,7 @@ public sealed class TestArena
         int burn = fighter.ConsumeStatus(StatusKind.Burn);
         fighter.Hp = Math.Max(0, fighter.Hp - burn);
         Emit(CombatEventKind.StatusDamage, fighter.X, fighter.Y - (fighter.Stats.HurtboxHeight / 2f), $"Burn -{burn}", fighter == Player1);
+        CheckPhase2(fighter);
     }
 
     private void Emit(CombatEventKind kind, float x, float y, string text, bool fromPlayer1)

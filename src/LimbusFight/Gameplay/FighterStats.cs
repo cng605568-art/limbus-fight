@@ -74,6 +74,11 @@ public sealed record FighterStats
 
     public PassiveStats Passive { get; init; } = PassiveStats.None;
 
+    /// <summary>Boss rules (Step 9); null for normal fighters.</summary>
+    public BossStats? Boss { get; init; }
+
+    public bool IsBoss => Boss is not null;
+
     public AttackData? Move(MoveSlot slot) => slot switch
     {
         MoveSlot.Skill1 => Punch,
@@ -164,4 +169,41 @@ public sealed record PassiveStats
         PassiveKind.Sturdy => $"{Value}% less Stagger damage",
         _ => "no passive",
     };
+}
+
+/// <summary>When a Boss's super armor works.</summary>
+public enum ArmorKind
+{
+    /// <summary>No armor: hits cause hitstun as usual.</summary>
+    None,
+
+    /// <summary>Armored during the wind-up and active frames of its own attacks.</summary>
+    Attacks,
+
+    /// <summary>Armored whenever it is not Staggered.</summary>
+    Always,
+}
+
+/// <summary>
+/// What makes a Boss different: super armor (hits hurt but do not interrupt), drawn bigger, and an
+/// enraged second phase below some health. Breaking its Stagger bar removes the armor.
+/// </summary>
+public sealed record BossStats
+{
+    public ArmorKind Armor { get; init; } = ArmorKind.Attacks;
+
+    /// <summary>Damage taken through armor (1 = full damage).</summary>
+    public float ArmorDamage { get; init; } = 1f;
+
+    /// <summary>Look size compared to a normal fighter.</summary>
+    public float DrawScale { get; init; } = 1.4f;
+
+    /// <summary>Health percentage where the second phase starts (0 = never).</summary>
+    public int Phase2HpPercent { get; init; } = 50;
+
+    /// <summary>Extra damage in phase 2, in percent.</summary>
+    public int Phase2DamagePercent { get; init; } = 20;
+
+    /// <summary>Extra clash power in phase 2.</summary>
+    public float Phase2ClashBonus { get; init; } = 3f;
 }

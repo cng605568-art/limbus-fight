@@ -83,14 +83,19 @@ public static class ArenaRenderer
         // Step 3: the fighter's look (pictures from the player's own Limbus files), if one is set up.
         if (looks is not null && looks.DrawFighter(slot, f, shake, flash))
         {
-            Ui.TextCentered(Label(f), (int)(f.X + shake), (int)(f.Y - f.Stats.HurtboxHeight - 64), 20, trim);
+            float size = f.Stats.Boss?.DrawScale ?? 1f;
+            Ui.TextCentered(Label(f), (int)(f.X + shake), (int)(f.Y - MathF.Max(f.Stats.HurtboxHeight, LookData.AutoHeight * size) - 24), 20, trim);
             return;
         }
 
-        Color fill = flash ? Theme.HitFlash : body;
+        Color fill = flash ? Theme.HitFlash
+            : f.ArmorFlash > 0 ? new Color((byte)210, (byte)214, (byte)228, (byte)255)
+            : f.InPhase2 ? new Color((byte)Math.Min(255, body.R + 70), (byte)(body.G * 0.6f), (byte)(body.B * 0.6f), (byte)255)
+            : body;
 
-        const float bodyW = 76f;
-        const float bodyH = 176f;
+        // The box follows the hurtbox (76x176 for the standard 84x182 one), so Bosses are bigger.
+        float bodyW = f.Stats.HurtboxWidth * (76f / 84f);
+        float bodyH = f.Stats.HurtboxHeight * (176f / 182f);
         float left = f.X - (bodyW * 0.5f) + shake;
         float top = f.Y - bodyH;
 
@@ -109,7 +114,17 @@ public static class ArenaRenderer
         Raylib.DrawRectangleRec(new Rectangle(visorX, top + 18f, 24f, 10f), trim);
 
         // Belt.
-        Raylib.DrawRectangleRec(new Rectangle(left, top + 96f, bodyW, 6f), trim);
+        Raylib.DrawRectangleRec(new Rectangle(left, top + (bodyH * (96f / 176f)), bodyW, 6f), trim);
+
+        if (f.Stats.IsBoss)
+        {
+            // A crown of spikes marks a Boss.
+            for (int i = 0; i < 3; i++)
+            {
+                float cx = left + (bodyW * (0.25f + (i * 0.25f)));
+                Raylib.DrawTriangle(new Vector2(cx - 9f, top), new Vector2(cx + 9f, top), new Vector2(cx, top - 18f), trim);
+            }
+        }
 
         // Punching arm.
         float extension = f.ArmExtension;
@@ -127,7 +142,7 @@ public static class ArenaRenderer
         }
 
         // Name tag.
-        Ui.TextCentered(Label(f), (int)(f.X + shake), (int)top - 28, 20, trim);
+        Ui.TextCentered(Label(f), (int)(f.X + shake), (int)top - (f.Stats.IsBoss ? 44 : 28), 20, trim);
     }
 
     /// <summary>The look's swing effect on the hitbox while the attack is out.</summary>

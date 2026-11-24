@@ -40,6 +40,9 @@ public sealed class BoxEditorScreen
 
     private static readonly string[] StatusChoices = { "none", "Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge" };
 
+    /// <summary>The fighter's boss rules, created (switched off) when a boss field is first edited.</summary>
+    private static BossData B(FighterData d) => d.Boss ??= new BossData { Enabled = false };
+
     private static Field Resist(string label, Func<FighterData, float> get, Action<FighterData, float> set) =>
         new("COMBAT", label, "x", 0.25f, 0.5f, false, get, set, _ => 1f) { Format = v => $"{v:0.##} {CombatRules.ResistLabel(v)}" };
 
@@ -142,6 +145,16 @@ public sealed class BoxEditorScreen
         new("PASSIVE", "Passive value", string.Empty, 1, 5, true, d => d.Passive.Value, (d, v) => d.Passive.Value = (int)v, _ => 0),
         new("PASSIVE", "Passive status", string.Empty, 1, 1, true, d => (int)d.Passive.Status, (d, v) => d.Passive.Status = (StatusKind)(((int)v % 7 + 7) % 7), _ => 0)
         { Format = v => ((StatusKind)(int)v).ToString(), Choices = 7 },
+
+        new("BOSS", "Boss", string.Empty, 1, 1, true, d => d.IsBoss ? 1 : 0, (d, v) => B(d).Enabled = ((int)v % 2 + 2) % 2 == 1, _ => 0)
+        { Format = v => v >= 1 ? "yes (armor, size, phase 2)" : "no", Choices = 2 },
+        new("BOSS", "Super armor", string.Empty, 1, 1, true, d => (int)(d.Boss?.Armor ?? ArmorKind.Attacks), (d, v) => B(d).Armor = (ArmorKind)(((int)v % 3 + 3) % 3), _ => 1)
+        { Format = v => ((ArmorKind)(int)v) switch { ArmorKind.None => "none", ArmorKind.Attacks => "while attacking", _ => "always" }, Choices = 3 },
+        new("BOSS", "Damage through armor", "%", 5, 25, true, d => (d.Boss?.ArmorDamage ?? 1f) * 100f, (d, v) => B(d).ArmorDamage = v / 100f, _ => 100),
+        new("BOSS", "Look size", "%", 5, 25, true, d => (d.Boss?.DrawScale ?? 1.4f) * 100f, (d, v) => B(d).DrawScale = v / 100f, _ => 140),
+        new("BOSS", "Phase 2 below health", "%", 5, 10, true, d => d.Boss?.Phase2HpPercent ?? 50, (d, v) => B(d).Phase2HpPercent = (int)v, _ => 50),
+        new("BOSS", "Phase 2 extra damage", "%", 5, 25, true, d => d.Boss?.Phase2DamagePercent ?? 20, (d, v) => B(d).Phase2DamagePercent = (int)v, _ => 20),
+        new("BOSS", "Phase 2 clash power", string.Empty, 1, 5, false, d => d.Boss?.Phase2ClashBonus ?? 3, (d, v) => B(d).Phase2ClashBonus = v, _ => 3),
 
         new("MOVE", "Move is on", string.Empty, 1, 1, true, d => M(d).Enabled ? 1 : 0, (d, v) => M(d).Enabled = _moveButton == "punch" || ((int)v % 2 + 2) % 2 == 1, _ => 1)
         { Format = v => v >= 1 ? "yes" : "no (button does nothing)", Choices = 2 },
