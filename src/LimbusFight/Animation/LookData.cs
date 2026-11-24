@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace LimbusFight.Animation;
 
-/// <summary>The five clips a test fighter needs in Step 3.</summary>
+/// <summary>The five pose clips a test fighter needs in Step 3, plus two effect clips.</summary>
 public enum ClipId
 {
     Idle,
@@ -12,6 +12,12 @@ public enum ClipId
     Jump,
     Punch,
     Hit,
+
+    /// <summary>Effect drawn on the hitbox while the punch is out (e.g. a slash).</summary>
+    SwingFx,
+
+    /// <summary>Effect drawn where a hit lands.</summary>
+    HitFx,
 }
 
 /// <summary>Which fighter a look belongs to.</summary>
@@ -123,8 +129,17 @@ public sealed class LookData
         ClipId.Idle => 12,
         ClipId.Walk => 8,
         ClipId.Hit => 8,
+        ClipId.SwingFx or ClipId.HitFx => 3,
         _ => 6,
     };
+
+    /// <summary>True for the effect clips (drawn on top of the fighters, not as a pose).</summary>
+    public static bool IsEffect(ClipId clip) => clip is ClipId.SwingFx or ClipId.HitFx;
+
+    /// <summary>Frames of the pose clips only (no effects).</summary>
+    [JsonIgnore]
+    public IEnumerable<LookFrame> PoseFrames =>
+        Clips.Where(kv => !kv.Key.EndsWith("fx", StringComparison.Ordinal)).SelectMany(kv => kv.Value);
 
     /// <summary>Drops broken entries and clamps numbers after loading a hand-edited file.</summary>
     public void Sanitise()

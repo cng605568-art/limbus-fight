@@ -23,16 +23,16 @@ public sealed class LookEditorScreen
     private const int ClipsX = 16;
     private const int ClipsW = 600;
     private const int ClipRowTop = PanelTop + 8;
-    private const int ClipRowH = 104;
-    private const int Thumb = 54;
-    private const int ThumbGap = 12;
+    private const int ClipRowH = 76;
+    private const int Thumb = 40;
+    private const int ThumbGap = 22;
     private const int ThumbsVisible = (ClipsW - 24) / (Thumb + ThumbGap);
 
     private const int PreviewX = 628;
     private const int PreviewW = 636;
     private const int PreviewFloorY = 470;
 
-    private static readonly ClipId[] AllClips = { ClipId.Idle, ClipId.Walk, ClipId.Jump, ClipId.Punch, ClipId.Hit };
+    private static readonly ClipId[] AllClips = { ClipId.Idle, ClipId.Walk, ClipId.Jump, ClipId.Punch, ClipId.Hit, ClipId.SwingFx, ClipId.HitFx };
 
     private readonly LookManager _looks;
     private LookSlot _slot = LookSlot.Player1;
@@ -301,7 +301,7 @@ public sealed class LookEditorScreen
                 "   sactx... file (a sprite sheet).",
                 "3. Pick a pose in the middle list.",
                 $"4. Press Ctrl+1 idle, Ctrl+2 walk, Ctrl+3 jump,",
-                "   Ctrl+4 punch or Ctrl+5 hit" + (_slot == LookSlot.Dummy ? ", with Shift held." : "."),
+                "   Ctrl+4 punch, Ctrl+5 hit, Ctrl+6 / 7 effects" + (_slot == LookSlot.Dummy ? " (+Shift)." : "."),
                 string.Empty,
                 "Or press Ctrl+A in step 3 to fill every clip",
                 "automatically from that file.",
@@ -327,7 +327,7 @@ public sealed class LookEditorScreen
                 Raylib.DrawRectangle(ClipsX + 2, top - 4, ClipsW - 4, ClipRowH - 4, new Color(Theme.Accent.R, Theme.Accent.G, Theme.Accent.B, (byte)28));
             }
 
-            string title = $"{LookData.ClipKey(clip).ToUpperInvariant()}  {frames.Count} frame{(frames.Count == 1 ? string.Empty : "s")}";
+            string title = $"{ClipTitle(clip)}  {frames.Count} frame{(frames.Count == 1 ? string.Empty : "s")}";
             Ui.Text(title, ClipsX + 12, top, Font, selected ? Theme.Accent : Theme.Text);
             Ui.TextRight(ClipHint(clip), ClipsX + ClipsW - 12, top, Font, Theme.TextDim);
 
@@ -336,19 +336,26 @@ public sealed class LookEditorScreen
             {
                 int index = scroll + i;
                 int x = ClipsX + 12 + (i * (Thumb + ThumbGap));
-                int y = top + 24;
+                int y = top + 23;
                 DrawThumb(frames[index], x, y, selected && index == _frameIndex);
                 string hold = clip is ClipId.Punch or ClipId.Jump ? $"#{index + 1}" : $"{frames[index].Hold}f";
-                Ui.TextCentered(hold, x + (Thumb / 2), y + Thumb + 3, 18, Theme.TextDim);
+                Ui.Text(hold, x + Thumb + 3, y + Thumb - 16, 16, Theme.TextDim);
             }
 
             if (frames.Count == 0)
             {
-                Ui.Text(clip == ClipId.Idle ? "empty: other clips fall back to idle" : "empty: uses idle", ClipsX + 12, top + 46, Font, Theme.TextDim);
+                string empty = clip switch
+                {
+                    ClipId.Idle => "empty: other clips fall back to idle",
+                    ClipId.SwingFx => "empty: no swing effect",
+                    ClipId.HitFx => "empty: the yellow spark is shown",
+                    _ => "empty: uses idle",
+                };
+                Ui.Text(empty, ClipsX + 12, top + 33, Font, Theme.TextDim);
             }
             else if (scroll + ThumbsVisible < frames.Count)
             {
-                Ui.Text($"+{frames.Count - scroll - ThumbsVisible}", ClipsX + ClipsW - 40, top + 46, Font, Theme.TextDim);
+                Ui.Text($"+{frames.Count - scroll - ThumbsVisible}", ClipsX + ClipsW - 40, top + 33, Font, Theme.TextDim);
             }
         }
     }
@@ -359,7 +366,16 @@ public sealed class LookEditorScreen
         ClipId.Walk => "loops while walking",
         ClipId.Jump => "crouch, rise, fall",
         ClipId.Punch => "wind-up, hit, recovery",
-        _ => "plays once when hit",
+        ClipId.Hit => "plays once when hit",
+        ClipId.SwingFx => "on the hitbox with the punch",
+        _ => "where the hit lands",
+    };
+
+    private static string ClipTitle(ClipId clip) => clip switch
+    {
+        ClipId.SwingFx => "SWING FX",
+        ClipId.HitFx => "HIT FX",
+        _ => LookData.ClipKey(clip).ToUpperInvariant(),
     };
 
     private void DrawThumb(LookFrame frame, int x, int y, bool selected)
@@ -394,7 +410,7 @@ public sealed class LookEditorScreen
         Raylib.DrawRectangle(PreviewX, PanelTop, PreviewW, PanelBottom - PanelTop, Theme.Panel);
         Raylib.DrawRectangleLines(PreviewX, PanelTop, PreviewW, PanelBottom - PanelTop, Theme.PanelBorder);
         Ui.Text("Preview at game size", PreviewX + 12, PanelTop + 8, Font, Theme.Accent);
-        Ui.TextRight("blue = hurtbox", PreviewX + PreviewW - 12, PanelTop + 8, Font, Theme.Hurtbox);
+        Ui.TextRight(LookData.IsEffect(Clip) ? "red = punch hitbox" : "blue = hurtbox", PreviewX + PreviewW - 12, PanelTop + 8, Font, LookData.IsEffect(Clip) ? Theme.Hitbox : Theme.Hurtbox);
 
         float feetX = PreviewX + (PreviewW / 2f);
         float feetY = PreviewFloorY;
@@ -405,8 +421,16 @@ public sealed class LookEditorScreen
         Raylib.DrawLineEx(new Vector2(PreviewX, PreviewFloorY), new Vector2(PreviewX + PreviewW, PreviewFloorY), 3f, Theme.Accent);
 
         List<LookFrame> frames = Frames;
-        int shown = PreviewFrame(frames);
-        bool drew = shown >= 0 && _looks.DrawPicture(_slot, frames[shown], feetX, feetY, 1, Color.White);
+        bool drew;
+        if (LookData.IsEffect(Clip))
+        {
+            drew = DrawEffectPreview(frames, feetX, feetY);
+        }
+        else
+        {
+            int shown = PreviewFrame(frames);
+            drew = shown >= 0 && _looks.DrawPicture(_slot, frames[shown], feetX, feetY, 1, Color.White);
+        }
 
         var hurt = new Rectangle(feetX - (Fighter.HurtboxWidth / 2f), feetY - Fighter.HurtboxHeight, Fighter.HurtboxWidth, Fighter.HurtboxHeight);
         Raylib.DrawRectangleLinesEx(hurt, 2f, new Color(Theme.Hurtbox.R, Theme.Hurtbox.G, Theme.Hurtbox.B, (byte)200));
@@ -446,6 +470,40 @@ public sealed class LookEditorScreen
         string facing = (Look.ArtFacesLeft ? "faces left" : "faces right") + (Look.AnchorAtPivot ? ", stands on pivot" : ", stands on bottom");
         string offset = Look.OffsetX != 0 || Look.OffsetY != 0 ? $"   offset {Look.OffsetX:0},{Look.OffsetY:0}" : string.Empty;
         Ui.Text(Ui.FitEnd($"{size}   {facing}{offset}", Font, PreviewW - 24), PreviewX + 12, infoY, Font, Theme.TextDim);
+    }
+
+    /// <summary>
+    /// Effect preview: the idle pose with the effect where it appears in a match (swing: on the punch's
+    /// hitbox; hit: just in front, where the punch would land), replaying every second.
+    /// </summary>
+    private bool DrawEffectPreview(List<LookFrame> frames, float feetX, float feetY)
+    {
+        if (Look.Frames(ClipId.Idle).FirstOrDefault() is LookFrame idle)
+        {
+            _looks.DrawPicture(_slot, idle, feetX, feetY, 1, new Color((byte)255, (byte)255, (byte)255, (byte)150));
+        }
+
+        if (frames.Count == 0)
+        {
+            return false;
+        }
+
+        AttackData punch = AttackData.TestPunch;
+        float x = feetX + punch.HitboxOffsetX + (punch.HitboxWidth / 2f);
+        float y = feetY + punch.HitboxOffsetY + (punch.HitboxHeight / 2f);
+        if (Clip == ClipId.HitFx)
+        {
+            x = feetX + punch.HitboxOffsetX + punch.HitboxWidth;
+        }
+
+        bool still = Raylib.IsKeyDown(KeyboardKey.Left) || Raylib.IsKeyDown(KeyboardKey.Right);
+        int total = frames.Sum(f => Math.Max(1, f.Hold));
+        (int Frame, float Alpha)? at = still ? (Math.Min(_frameIndex, frames.Count - 1), 1f) : EffectTiming.At(frames, (int)(_previewTick % (total + 30)));
+
+        var box = new Rectangle(feetX + punch.HitboxOffsetX, feetY + punch.HitboxOffsetY, punch.HitboxWidth, punch.HitboxHeight);
+        Raylib.DrawRectangleLinesEx(box, 1f, new Color(Theme.Hitbox.R, Theme.Hitbox.G, Theme.Hitbox.B, (byte)150));
+
+        return at is not (int index, float alpha) || _looks.DrawEffect(_slot, frames[index], x, y, 1, alpha);
     }
 
     /// <summary>Which frame the preview shows now: the selected one while editing, else the clip playing as in a match.</summary>

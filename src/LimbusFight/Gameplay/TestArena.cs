@@ -39,6 +39,9 @@ public sealed class TestArena
     /// <summary>Stage position of the most recent hit spark.</summary>
     public (float X, float Y) LastHitPoint { get; private set; }
 
+    /// <summary>Who landed the most recent hit (for the hit effect), or null.</summary>
+    public Fighter? LastHitAttacker { get; private set; }
+
     /// <summary>Advances the match by exactly one 60 Hz frame.</summary>
     public void Tick(FrameInput player1Input)
     {
@@ -75,6 +78,7 @@ public sealed class TestArena
         HitstopRemaining = 0;
         TotalHits = 0;
         LastHitFrame = -1;
+        LastHitAttacker = null;
     }
 
     private void ResolvePushboxes()
@@ -131,6 +135,7 @@ public sealed class TestArena
             TotalHits++;
             LastHitFrame = Frame;
             LastHitPoint = hitbox.IntersectionCenter(hurtbox);
+            LastHitAttacker = attacker;
             return;
         }
     }

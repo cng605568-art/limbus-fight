@@ -27,6 +27,11 @@ two test fighters, F1 hitbox / FPS overlay and the red update screen.
   (fx, glow, portrait, icon...) are skipped. If names say nothing, shapes decide: the most upright
   pose is idle and the widest poses are the punch. Each frame keeps a note saying why it was
   picked (shown in F4); Ctrl+Z undoes the auto look. Hold Shift for the Dummy.
+- **Effects:** two more clips per look. *Swing fx* (Ctrl+6) is drawn on the punch's hitbox from
+  its first active frame, so the slash appears exactly with the hitbox; *hit fx* (Ctrl+7) plays
+  where a hit lands, through hitstop, replacing the yellow spark. Auto look fills them from effect
+  sprites (slash / trail for the swing, hit / spark / impact for the hit); magic circles, portraits
+  and other UI pictures are left out. Effects are mirrored with the fighter and drawn at the look's size.
 - **Timing follows the moves:** punch frames are synced to the attack (1st = wind-up during
   startup, 2nd = the hit during active frames, the rest share recovery); jump frames follow the
   jump (crouch, rise, fall); idle, walk and hit play by each frame's hold time.
@@ -114,7 +119,7 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | J | punch |
 | R | reset positions |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
-| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+A auto look from the open file, Ctrl+Z undo it, add Shift for the Dummy, Ctrl+O open exports, Ctrl+R report) |
+| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+6 / 7 to the swing / hit effect, Ctrl+A auto look from the open file, Ctrl+Z undo it, add Shift for the Dummy, Ctrl+O open exports, Ctrl+R report) |
 | F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
 | F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |
 | ESC | quit |

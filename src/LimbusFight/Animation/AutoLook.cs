@@ -45,6 +45,32 @@ public static class AutoLook
 
     private sealed record Rule(Regex Pattern, Role Role, int Weight, string Word);
 
+    /// <summary>What an effect picture looks like it is for.</summary>
+    public enum EffectKind
+    {
+        None,
+        Generic,
+        Swing,
+        Hit,
+    }
+
+    private static readonly HashSet<string> UiWords = new(StringComparer.Ordinal)
+    {
+        "icon", "portrait", "face", "cutin", "cut", "illust", "illustration", "bg", "background", "ui", "frame", "banner", "logo",
+        "title", "story", "storylog", "thumb", "thumbnail", "mask", "sheet", "noise", "gradient",
+    };
+
+    private static readonly HashSet<string> EffectWords = new(StringComparer.Ordinal)
+    {
+        "fx", "vfx", "eff", "effect", "effects", "particle", "particles", "glow", "trail", "aura", "smoke", "dust", "spark", "sparks",
+        "flash", "light", "lightning", "beam", "bullet", "projectile", "blood", "ring", "circle", "magiccircle", "wave", "slashfx",
+        "line", "lines", "shadow", "impact", "burst", "explosion",
+    };
+
+    private static readonly string[] HitEffectWords = { "hit", "impact", "spark", "sparks", "blood", "burst", "explosion", "explode", "damage", "dmg", "hurt", "crash", "shock", "flash" };
+
+    private static readonly string[] SwingEffectWords = { "slash", "swing", "trail", "attack", "atk", "s", "skill", "arc", "wave", "stab", "thrust", "pierce", "blunt", "strike", "sword", "blade" };
+
     /// <summary>Keyword rules, matched against single lower-case words of a name. First match per word counts.</summary>
     private static readonly Rule[] Rules = BuildRules();
 
@@ -152,11 +178,32 @@ public static class AutoLook
             hitNote = "no damage pose; using the '{0}' pose";
         }
 
+        // Effects: a slash-like one for the swing, a spark / impact-like one for the hit.
+        List<(Group Group, EffectKind Kind, string Word)> effects = groups
+            .Where(g => g.Role == Role.Excluded)
+            .Select(g => (Group: g, Read: ClassifyEffect(g.Base)))
+            .Where(x => x.Read.Kind is EffectKind.Swing or EffectKind.Hit)
+            .Select(x => (x.Group, x.Read.Kind, x.Read.Word))
+            .ToList();
+        (Group Group, EffectKind Kind, string Word)? swingFx = BestEffect(effects, EffectKind.Swing);
+        (Group Group, EffectKind Kind, string Word)? hitFx = BestEffect(effects, EffectKind.Hit);
+        if (swingFx is { } sw)
+        {
+            sw.Group.Word = sw.Word;
+        }
+
+        if (hitFx is { } hf)
+        {
+            hf.Group.Word = hf.Word;
+        }
+
         Fill(look, picks, ClipId.Idle, idle, makeFrame, "name says '{0}'");
         Fill(look, picks, ClipId.Walk, walk, makeFrame, "name says '{0}'");
         Fill(look, picks, ClipId.Jump, jump, makeFrame, jumpNote);
         Fill(look, picks, ClipId.Punch, attack, makeFrame, "name says '{0}'");
         Fill(look, picks, ClipId.Hit, hit, makeFrame, hitNote);
+        Fill(look, picks, ClipId.SwingFx, swingFx?.Group, makeFrame, "effect name says '{0}'");
+        Fill(look, picks, ClipId.HitFx, hitFx?.Group, makeFrame, "effect name says '{0}'");
 
         bool usedShapes = false;
         if (look.Frames(ClipId.Idle).Count == 0 || look.Frames(ClipId.Punch).Count == 0)
@@ -165,7 +212,8 @@ public static class AutoLook
         }
 
         string? character = DetectCharacter(unique.Select(c => c.Name));
-        string summary = Summarise(look, usedShapes, groups.Count(g => g.Role == Role.Excluded), character);
+        int skipped = groups.Count(g => g.Role == Role.Excluded) - (swingFx is null ? 0 : 1) - (hitFx is null || hitFx?.Group == swingFx?.Group ? 0 : 1);
+        string summary = Summarise(look, usedShapes, Math.Max(0, skipped), character);
         return new AutoLookResult(look, picks, summary, usedShapes, character);
     }
 
@@ -247,6 +295,37 @@ public static class AutoLook
         return (best.Key, best.Value.Score, best.Value.Word);
     }
 
+    /// <summary>Whether a name is an effect picture, and if so whether it suits a swing or a hit.</summary>
+    public static (EffectKind Kind, string Word) ClassifyEffect(string name)
+    {
+        List<string> words = Words(name);
+        var probes = new List<string>(words);
+        for (int i = 0; i + 1 < words.Count; i++)
+        {
+            probes.Add(words[i] + words[i + 1]);
+        }
+
+        if (probes.Any(UiWords.Contains))
+        {
+            return (EffectKind.None, string.Empty);
+        }
+
+        string? effectWord = probes.FirstOrDefault(EffectWords.Contains);
+        if (effectWord is null)
+        {
+            return (EffectKind.None, string.Empty);
+        }
+
+        string? hit = probes.FirstOrDefault(w => HitEffectWords.Contains(w));
+        if (hit is not null)
+        {
+            return (EffectKind.Hit, hit);
+        }
+
+        string? swing = probes.FirstOrDefault(w => SwingEffectWords.Contains(w));
+        return swing is not null ? (EffectKind.Swing, swing) : (EffectKind.Generic, effectWord);
+    }
+
     /// <summary>Which Sinner the names mention most, if any.</summary>
     public static string? DetectCharacter(IEnumerable<string> names)
     {
@@ -292,6 +371,18 @@ public static class AutoLook
             .ThenByDescending(g => Math.Min(g.Frames.Count, MaxFramesPerClip))
             .ThenBy(g => g.Base.Length)
             .FirstOrDefault();
+    }
+
+    /// <summary>Best effect of a kind: 2-6 frames preferred, then the lowest skill number, then the name.</summary>
+    private static (Group Group, EffectKind Kind, string Word)? BestEffect(List<(Group Group, EffectKind Kind, string Word)> effects, EffectKind kind)
+    {
+        var best = effects
+            .Where(e => e.Kind == kind)
+            .OrderBy(e => e.Group.Frames.Count is >= 2 and <= 6 ? 0 : 1)
+            .ThenBy(e => SkillNumber(e.Group.Base))
+            .ThenBy(e => e.Group.Base, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return best.Count > 0 ? best[0] : null;
     }
 
     /// <summary>The punch: a plain attack before skills, the lowest skill number first, 2-5 frames preferred.</summary>
@@ -434,9 +525,12 @@ public static class AutoLook
         }
 
         string clips = string.Join(", ", new[] { ClipId.Idle, ClipId.Walk, ClipId.Jump, ClipId.Punch, ClipId.Hit }.Select(Count));
+        int swing = look.Frames(ClipId.SwingFx).Count;
+        int hit = look.Frames(ClipId.HitFx).Count;
+        string fx = swing + hit == 0 ? "; no effects found" : $"; effects: swing {(swing == 0 ? "-" : swing)}, hit {(hit == 0 ? "-" : hit)}";
         string who = character is null ? string.Empty : $"{character}: ";
         string how = usedShapes ? " (some guessed by shape)" : string.Empty;
-        string skipped = excluded > 0 ? $", {excluded} effect group{(excluded == 1 ? string.Empty : "s")} skipped" : string.Empty;
-        return $"{who}{clips}{how}{skipped}";
+        string skipped = excluded > 0 ? $"; {excluded} other picture group{(excluded == 1 ? string.Empty : "s")} skipped" : string.Empty;
+        return $"{who}{clips}{how}{fx}{skipped}";
     }
 }

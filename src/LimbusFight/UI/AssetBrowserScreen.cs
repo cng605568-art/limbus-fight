@@ -477,7 +477,7 @@ public sealed class AssetBrowserScreen : IDisposable
                 SetStatus(undone ? $"{(slot == LookSlot.Player1 ? "P1" : "Dummy")} look restored to how it was before the auto look." : "Nothing to undo.", undone ? Theme.Good : Theme.Warn);
             }
 
-            KeyboardKey[] digits = { KeyboardKey.One, KeyboardKey.Two, KeyboardKey.Three, KeyboardKey.Four, KeyboardKey.Five };
+            KeyboardKey[] digits = { KeyboardKey.One, KeyboardKey.Two, KeyboardKey.Three, KeyboardKey.Four, KeyboardKey.Five, KeyboardKey.Six, KeyboardKey.Seven };
             for (int i = 0; i < digits.Length; i++)
             {
                 if (keys.WasPressed(digits[i]))
@@ -734,7 +734,7 @@ public sealed class AssetBrowserScreen : IDisposable
         SetStatus($"Auto look {who}: {result.Summary}.  F4 check, Ctrl+Z undo", result.UsedShapes ? Theme.Warn : Theme.Good);
     }
 
-    /// <summary>Ctrl+1..5: appends the selected sprite (or sheet) to a clip of the P1 / Dummy look.</summary>
+    /// <summary>Ctrl+1..5: appends the selected sprite (or sheet) to a pose clip; Ctrl+6 / 7 to the swing / hit effect.</summary>
     private void AddToLook(LookSlot slot, ClipId clip)
     {
         if (Looks is null || _contentsSource is null || _texIndex >= _textureView.Count)
@@ -1036,7 +1036,7 @@ public sealed class AssetBrowserScreen : IDisposable
         if (_image is not null)
         {
             Ui.Text(Ui.FitEnd("Ctrl+A  auto look for P1 from this file", Font, PreviewW - 20), PreviewX + 10, infoY + 6, Font, Theme.Accent);
-            Ui.Text(Ui.FitEnd("Ctrl+1-5  add pose: idle walk jump punch hit", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + RowHeight, Font, Theme.Text);
+            Ui.Text(Ui.FitEnd("Ctrl+1-5 pose: idle walk jump punch hit, 6/7 fx", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + RowHeight, Font, Theme.Text);
             Ui.Text(Ui.FitEnd("+Shift = Dummy  Ctrl+Z undo  Ctrl+S save PNG", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + (2 * RowHeight), Font, Theme.TextDim);
         }
     }

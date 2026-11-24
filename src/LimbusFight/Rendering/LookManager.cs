@@ -178,7 +178,7 @@ public sealed class LookManager : IDisposable
             return data.Scale;
         }
 
-        LookFrame? reference = data.Frames(ClipId.Idle).FirstOrDefault() ?? data.AllFrames.FirstOrDefault();
+        LookFrame? reference = data.Frames(ClipId.Idle).FirstOrDefault() ?? data.PoseFrames.FirstOrDefault() ?? data.AllFrames.FirstOrDefault();
         if (reference is not null && TryGetPicture(slot, reference, out _, out DecodedImage image) && image.Height > 0)
         {
             return Math.Clamp(LookData.AutoHeight / image.Height, 0.05f, 4f);
@@ -206,8 +206,8 @@ public sealed class LookManager : IDisposable
             return true;
         }
 
-        // That picture is still loading or failed: show any picture of the look that is ready.
-        foreach (LookFrame other in data.Frames(ClipId.Idle).Concat(data.AllFrames))
+        // That picture is still loading or failed: show any pose of the look that is ready.
+        foreach (LookFrame other in data.Frames(ClipId.Idle).Concat(data.PoseFrames))
         {
             if (DrawPicture(slot, other, fighter.X + shake, fighter.Y, fighter.Facing, tint))
             {
@@ -240,6 +240,29 @@ public sealed class LookManager : IDisposable
 
         var source = new Rectangle(0, 0, mirror ? -image.Width : image.Width, image.Height);
         Raylib.DrawTexturePro(texture, source, new Rectangle(left + offsetX, top, w, h), Vector2.Zero, 0f, tint);
+        return true;
+    }
+
+    /// <summary>
+    /// Draws an effect frame with its pivot on (centerX, centerY), at the look's size, mirrored when
+    /// facing left. Returns false if the picture is not ready.
+    /// </summary>
+    public bool DrawEffect(LookSlot slot, LookFrame frame, float centerX, float centerY, int facing, float alpha, float extraScale = 1f)
+    {
+        if (!TryGetPicture(slot, frame, out Texture2D texture, out DecodedImage image))
+        {
+            return false;
+        }
+
+        LookData data = _slots[slot].Data;
+        float scale = EffectiveScale(slot) * extraScale;
+        (float px, float py) = image.Pivot ?? (image.Width / 2f, image.Height / 2f);
+        bool mirror = (facing < 0) != data.ArtFacesLeft;
+        float left = mirror ? centerX - ((image.Width - px) * scale) : centerX - (px * scale);
+        float top = centerY - (py * scale);
+        var source = new Rectangle(0, 0, mirror ? -image.Width : image.Width, image.Height);
+        var tint = new Color((byte)255, (byte)255, (byte)255, (byte)Math.Clamp((int)(alpha * 255), 0, 255));
+        Raylib.DrawTexturePro(texture, source, new Rectangle(left, top, image.Width * scale, image.Height * scale), Vector2.Zero, 0f, tint);
         return true;
     }
 

@@ -24,7 +24,16 @@ public static class ArenaRenderer
         DrawFighter(arena, arena.Dummy, Theme.DummyBody, Theme.DummyTrim, looks, LookSlot.Dummy);
         DrawFighter(arena, arena.Player1, Theme.Player1Body, Theme.Player1Trim, looks, LookSlot.Player1);
 
-        DrawHitSpark(arena);
+        if (looks is not null)
+        {
+            DrawSwingEffect(looks, LookSlot.Dummy, arena.Dummy);
+            DrawSwingEffect(looks, LookSlot.Player1, arena.Player1);
+        }
+
+        if (!DrawHitEffect(arena, looks))
+        {
+            DrawHitSpark(arena);
+        }
 
         if (showBoxes)
         {
@@ -119,6 +128,43 @@ public static class ArenaRenderer
 
         // Name tag.
         Ui.TextCentered(f.IsDummy ? "DUMMY" : "P1", (int)(f.X + shake), (int)top - 28, 20, trim);
+    }
+
+    /// <summary>The look's swing effect on the hitbox while the attack is out.</summary>
+    private static void DrawSwingEffect(LookManager looks, LookSlot slot, Fighter f)
+    {
+        List<LookFrame> frames = looks.Get(slot).Frames(ClipId.SwingFx);
+        if (f.CurrentAttack is not { } attack || EffectTiming.Swing(frames, f) is not (int index, float alpha))
+        {
+            return;
+        }
+
+        (float x, float y) = EffectTiming.SwingAnchor(f, attack);
+        looks.DrawEffect(slot, frames[index], x, y, f.Facing, alpha);
+    }
+
+    /// <summary>The attacker's hit effect where the hit landed. False if there is none (the spark is drawn instead).</summary>
+    private static bool DrawHitEffect(TestArena arena, LookManager? looks)
+    {
+        if (looks is null || arena.LastHitFrame < 0 || arena.LastHitAttacker is not Fighter attacker)
+        {
+            return false;
+        }
+
+        LookSlot slot = attacker == arena.Player1 ? LookSlot.Player1 : LookSlot.Dummy;
+        List<LookFrame> frames = looks.Get(slot).Frames(ClipId.HitFx);
+        if (frames.Count == 0)
+        {
+            return false;
+        }
+
+        if (EffectTiming.Hit(frames, arena.Frame - arena.LastHitFrame) is (int index, float alpha))
+        {
+            (float hx, float hy) = arena.LastHitPoint;
+            return looks.DrawEffect(slot, frames[index], hx, hy, attacker.Facing, alpha);
+        }
+
+        return true; // finished playing: no spark either
     }
 
     private static void DrawHitSpark(TestArena arena)
