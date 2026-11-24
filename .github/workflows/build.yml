@@ -46,7 +46,7 @@ jobs:
         run: >
           dotnet publish $env:PROJECT
           --configuration Release
-          -p:TargetFramework=net10.0
+          -p:LimbusTfm=net10.0
           --runtime win-x64
           --self-contained true
           --output publish
