@@ -36,16 +36,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up .NET 8 SDK
+      - name: Set up .NET 10 SDK
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Publish self-contained single-file exe
         shell: pwsh
         run: >
           dotnet publish $env:PROJECT
           --configuration Release
+          -p:TargetFramework=net10.0
           --runtime win-x64
           --self-contained true
           --output publish

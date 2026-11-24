@@ -1,6 +1,6 @@
 # Limbus Fight
 
-A 2D fighting fangame of *Limbus Company*, written in pure C# (.NET 8) on top of
+A 2D fighting fangame of *Limbus Company*, written in pure C# (.NET 10 for releases; the code also builds on .NET 8) on top of
 [Raylib-cs](https://github.com/raylib-cs/raylib-cs). No game engine.
 
 This repository contains **no Limbus Company assets**. The game reads sprites and audio

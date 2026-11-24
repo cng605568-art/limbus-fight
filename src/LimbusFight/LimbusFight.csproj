@@ -5,6 +5,7 @@
   <!-- ===================================================================== -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Release builds (CI) publish for .NET 10 with -p:TargetFramework=net10.0; the code also builds on .NET 8. -->
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
