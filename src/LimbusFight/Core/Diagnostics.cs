@@ -69,7 +69,11 @@ public static class SelfTest
         bool assetsOk = ProbeAssetLibraries();
         Console.WriteLine();
 
-        bool passed = raylibOk && assetsOk;
+        Console.WriteLine("[Looks] look file + sprite cutter probe");
+        bool looksOk = ProbeLooks();
+        Console.WriteLine();
+
+        bool passed = raylibOk && assetsOk && looksOk;
         Console.WriteLine(passed ? "SELFTEST PASSED" : "SELFTEST FAILED");
         return passed ? 0 : 1;
     }
@@ -88,6 +92,33 @@ public static class SelfTest
             bool red = decoded && rgba[0] == 255 && rgba[1] == 0 && rgba[2] == 0 && rgba[3] == 255;
             Console.WriteLine($"  DXT1 test decode    : {(red ? "ok" : "FAILED " + error)}");
             return red;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  FAILED: {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Proves look files survive a save / load round trip and the sprite cutter runs (no files touched).</summary>
+    private static bool ProbeLooks()
+    {
+        try
+        {
+            var look = new LimbusFight.Animation.LookData { Scale = 0.5f, ArtFacesLeft = true };
+            look.EditFrames(LimbusFight.Animation.ClipId.Punch).Add(new LimbusFight.Animation.LookFrame { File = "bundle", Name = "pose", Sheet = "sheet", Hold = 7 });
+            var back = LimbusFight.Animation.LookStore.Deserialize(LimbusFight.Animation.LookStore.Serialize(look));
+            var frame = back.Frames(LimbusFight.Animation.ClipId.Punch).SingleOrDefault();
+            bool jsonOk = back.Scale == 0.5f && back.ArtFacesLeft && frame is { Name: "pose", Sheet: "sheet", Hold: 7 };
+            Console.WriteLine($"  look JSON round trip: {(jsonOk ? "ok" : "FAILED")}");
+
+            // 2x2 sheet, cut its top-right pixel as a 1x1 rectangle sprite.
+            byte[] sheet = { 1, 1, 1, 255, 2, 2, 2, 255, 3, 3, 3, 255, 4, 4, 4, 255 };
+            var g = new LimbusFight.Assets.SpriteGeometry { RectWidth = 1, RectHeight = 1, TexRectX = 1, TexRectY = 1, TexRectWidth = 1, TexRectHeight = 1, SettingsRaw = 1u | 2u };
+            var cut = LimbusFight.Assets.SpriteCutter.Cut(g, sheet, 2, 2);
+            bool cutOk = cut.Width == 1 && cut.Height == 1 && cut.Rgba[0] == 2;
+            Console.WriteLine($"  sprite cutter       : {(cutOk ? "ok" : "FAILED")}");
+            return jsonOk && cutOk;
         }
         catch (Exception ex)
         {

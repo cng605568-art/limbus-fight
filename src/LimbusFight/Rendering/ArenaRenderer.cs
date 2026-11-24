@@ -1,4 +1,5 @@
 using System.Numerics;
+using LimbusFight.Animation;
 using LimbusFight.Gameplay;
 using LimbusFight.UI;
 using Raylib_cs;
@@ -13,15 +14,15 @@ public static class ArenaRenderer
 {
     private const int HitSparkFrames = 14;
 
-    public static void Draw(TestArena arena, bool showBoxes, int width, int height)
+    public static void Draw(TestArena arena, bool showBoxes, int width, int height, LookManager? looks = null)
     {
         DrawStage(width, height);
 
         DrawShadow(arena.Player1);
         DrawShadow(arena.Dummy);
 
-        DrawFighter(arena, arena.Dummy, Theme.DummyBody, Theme.DummyTrim);
-        DrawFighter(arena, arena.Player1, Theme.Player1Body, Theme.Player1Trim);
+        DrawFighter(arena, arena.Dummy, Theme.DummyBody, Theme.DummyTrim, looks, LookSlot.Dummy);
+        DrawFighter(arena, arena.Player1, Theme.Player1Body, Theme.Player1Trim, looks, LookSlot.Player1);
 
         DrawHitSpark(arena);
 
@@ -59,7 +60,7 @@ public static class ArenaRenderer
         Raylib.DrawEllipse((int)f.X, (int)f.FloorY + 3, 50f * scale, 9f * scale, Theme.Shadow);
     }
 
-    private static void DrawFighter(TestArena arena, Fighter f, Color body, Color trim)
+    private static void DrawFighter(TestArena arena, Fighter f, Color body, Color trim, LookManager? looks, LookSlot slot)
     {
         // Hitstop shake on the fighter being hit.
         float shake = 0f;
@@ -69,6 +70,14 @@ public static class ArenaRenderer
         }
 
         bool flash = f.State == FighterState.Hitstun && (f.StateFrame / 2) % 2 == 0;
+
+        // Step 3: the fighter's look (pictures from the player's own Limbus files), if one is set up.
+        if (looks is not null && looks.DrawFighter(slot, f, shake, flash))
+        {
+            Ui.TextCentered(f.IsDummy ? "DUMMY" : "P1", (int)(f.X + shake), (int)(f.Y - Fighter.HurtboxHeight - 64), 20, trim);
+            return;
+        }
+
         Color fill = flash ? Theme.HitFlash : body;
 
         const float bodyW = 76f;

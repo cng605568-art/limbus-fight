@@ -224,6 +224,9 @@ public sealed class AssetCache
         }
     }
 
+    /// <summary>Every remembered file (used to find a sprite again after Limbus renames a bundle).</summary>
+    public IEnumerable<CachedFile> Entries => _files.Values;
+
     /// <summary>All indexed names, for the report.</summary>
     public IEnumerable<AssetName> AllNames() =>
         _files.Values.Where(f => f.Names is not null).SelectMany(f => f.Names!);

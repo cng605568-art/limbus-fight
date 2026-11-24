@@ -14,7 +14,23 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 2 (testing):** asset discovery.
+**Step 3 (testing):** sprites in the arena.
+
+- **Looks:** each fighter (P1 and the Dummy) has a look made of five clips: idle, walk, jump,
+  punch and hit. In the F3 browser, pick a sprite and press **Ctrl+1..5** to add it to a P1 clip
+  (hold **Shift** for the Dummy). The fighter is then drawn with those pictures instead of a box;
+  hitboxes (F1) stay exactly where they were.
+- **Timing follows the moves:** punch frames are synced to the attack (1st = wind-up during
+  startup, 2nd = the hit during active frames, the rest share recovery); jump frames follow the
+  jump (crouch, rise, fall); idle, walk and hit play by each frame's hold time.
+- **F4 look editor:** frame thumbnails per clip, hold times, re-order / remove frames, size,
+  flip, anchor (bottom edge or Unity pivot) and nudge, with a game-sized preview against the
+  hurtbox. Saved immediately to `%LOCALAPPDATA%\LimbusFight\looks\p1.json` / `dummy.json`.
+- Look files hold **names only** (bundle folder, sprite name, sheet name, timing), never pixels.
+  Pictures are cut from the player's own files at start-up; if a game update renames a bundle,
+  the sprite is found again through the name index.
+
+**Step 2 (done):** asset discovery.
 
 - Finds both places Limbus Company keeps files: `LimbusCompany_Data` in the Steam install, and the
   bundles the game downloads to `%USERPROFILE%\AppData\LocalLow\Unity\ProjectMoon_LimbusCompany`.
@@ -57,14 +73,18 @@ LimbusFight/
     │   ├── AssetIndexer.cs          reads texture / sprite / sound names for search
     │   ├── UnityAssetReader.cs      opens bundles, lists textures + sprites, follows atlases (AssetsTools.NET)
     │   ├── SpriteCutter.cs          cuts one sprite out of its sheet (mesh UVs, rotation, tight mask)
+    │   ├── LookLoader.cs            finds a look's sprites in the player's files and cuts them
     │   ├── TextureDecoding.cs       Unity texture formats -> RGBA
     │   ├── AssetReport.cs           LimbusFight_asset_report.txt
     │   └── AssetScanCli.cs          --scan-assets
+    ├── Animation/                   looks: data files and clip choice (no Raylib types)
+    │   ├── LookData.cs              look file format (clips of sprite references) + load/save
+    │   └── ClipPicker.cs            fighter state -> clip + frame (punch synced to its frames)
     ├── Gameplay/                    pure simulation (no Raylib types)
     │   ├── Box.cs  FrameInput.cs  AttackData.cs  Fighter.cs  TestArena.cs
     ├── Input/KeyboardSampler.cs     keyboard -> per-tick input
-    ├── Rendering/                   stage, fighters, debug boxes, window scaling
-    ├── UI/                          status panel, update screen, debug HUD, asset browser, theme
+    ├── Rendering/                   stage, fighters, debug boxes, window scaling, look textures
+    ├── UI/                          status panel, update screen, debug HUD, asset browser, look editor, theme
     └── ThirdParty/CrnUnity/         Crunch texture decoder (MIT / zlib)
 ```
 
@@ -86,8 +106,9 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | J | punch |
 | R | reset positions |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
-| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+O open exports, Ctrl+R report) |
-| F5 | re-scan Steam (and the asset folders when the browser is open) |
+| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+Shift+1..5 to the Dummy's, Ctrl+O open exports, Ctrl+R report) |
+| F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
+| F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |
 | ESC | quit |
 
 ## Version gate

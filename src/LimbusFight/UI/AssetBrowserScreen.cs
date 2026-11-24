@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using LimbusFight.Animation;
 using LimbusFight.Assets;
 using LimbusFight.Core;
 using LimbusFight.Input;
@@ -100,6 +101,9 @@ public sealed class AssetBrowserScreen : IDisposable
     private string? _status;
     private Color _statusColor = Theme.Text;
     private double _statusUntil;
+
+    /// <summary>Fighter looks; Ctrl+1..5 adds the selected picture to one (set by Program).</summary>
+    public LookManager? Looks { get; set; }
 
     /// <summary>Folder where Ctrl+S saves PNGs: %LOCALAPPDATA%\LimbusFight\exports.</summary>
     public static string ExportFolder =>
@@ -409,10 +413,11 @@ public sealed class AssetBrowserScreen : IDisposable
     private void HandleTyping()
     {
         bool changed = false;
+        bool ctrl = Raylib.IsKeyDown(KeyboardKey.LeftControl) || Raylib.IsKeyDown(KeyboardKey.RightControl);
         int codepoint;
         while ((codepoint = Raylib.GetCharPressed()) != 0)
         {
-            if (codepoint is >= 32 and < 127 && _filter.Length < 60)
+            if (!ctrl && codepoint is >= 32 and < 127 && _filter.Length < 60)
             {
                 _filter += (char)codepoint;
                 changed = true;
@@ -455,6 +460,19 @@ public sealed class AssetBrowserScreen : IDisposable
         if (ctrl && keys.WasPressed(KeyboardKey.R))
         {
             StartReport();
+        }
+
+        if (ctrl)
+        {
+            bool shift = Raylib.IsKeyDown(KeyboardKey.LeftShift) || Raylib.IsKeyDown(KeyboardKey.RightShift);
+            KeyboardKey[] digits = { KeyboardKey.One, KeyboardKey.Two, KeyboardKey.Three, KeyboardKey.Four, KeyboardKey.Five };
+            for (int i = 0; i < digits.Length; i++)
+            {
+                if (keys.WasPressed(digits[i]))
+                {
+                    AddToLook(shift ? LookSlot.Dummy : LookSlot.Player1, (ClipId)i);
+                }
+            }
         }
 
         if (keys.WasPressed(KeyboardKey.Tab) || keys.WasPressed(KeyboardKey.Right) || keys.WasPressed(KeyboardKey.Left))
@@ -661,6 +679,32 @@ public sealed class AssetBrowserScreen : IDisposable
         {
             SetStatus("Could not save PNG: " + ex.Message, Theme.Bad);
         }
+    }
+
+    /// <summary>Ctrl+1..5: appends the selected sprite (or sheet) to a clip of the P1 / Dummy look.</summary>
+    private void AddToLook(LookSlot slot, ClipId clip)
+    {
+        if (Looks is null || _contentsSource is null || _texIndex >= _textureView.Count)
+        {
+            SetStatus("Open a file and pick a sprite first.", Theme.Warn);
+            return;
+        }
+
+        PictureEntry entry = _textureView[_texIndex];
+        string kind = entry.Sprite is not null ? LookFrame.KindSprite : LookFrame.KindTexture;
+        string? sheet = entry.Sprite is not null && _image is not null && _image.Name == entry.Name ? _image.Sheet : null;
+        LookFrame frame = LookLoader.MakeFrame(_contentsSource, kind, entry.Name, sheet, LookData.DefaultHold(clip));
+
+        int count = 0;
+        Looks.Modify(slot, look =>
+        {
+            List<LookFrame> frames = look.EditFrames(clip);
+            frames.Add(frame);
+            count = frames.Count;
+        });
+
+        string who = slot == LookSlot.Player1 ? "P1" : "Dummy";
+        SetStatus($"Added {entry.Name} to {who} {LookData.ClipKey(clip)} (frame {count}). F4 edits looks; F3 goes back to the arena.", Theme.Good);
     }
 
     private void OpenFolder(string folder)
@@ -939,6 +983,8 @@ public sealed class AssetBrowserScreen : IDisposable
         if (_image is not null)
         {
             Ui.Text("Ctrl+S  save PNG (stays on this PC)", PreviewX + 10, infoY + 6, Font, Theme.TextDim);
+            Ui.Text(Ui.FitEnd("Ctrl+1-5  add to P1: idle walk jump punch hit", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + RowHeight, Font, Theme.Accent);
+            Ui.Text(Ui.FitEnd("+Shift = Dummy     F4  edit looks", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + (2 * RowHeight), Font, Theme.TextDim);
         }
     }
 

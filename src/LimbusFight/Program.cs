@@ -1,4 +1,5 @@
 using System.Numerics;
+using LimbusFight.Animation;
 using LimbusFight.Assets;
 using LimbusFight.Core;
 using LimbusFight.Gameplay;
@@ -10,8 +11,9 @@ using Raylib_cs;
 namespace LimbusFight;
 
 /// <summary>
-/// Entry point: a 60 FPS Raylib window with the Limbus Company Steam status, the two-box fighting
-/// sandbox (Step 1) and the F3 asset browser (Step 2). Everything is drawn to a fixed 1280x720
+/// Entry point: a 60 FPS Raylib window with the Limbus Company Steam status, the fighting sandbox
+/// (Step 1), the F3 asset browser (Step 2) and fighter looks made of the player's own Limbus
+/// sprites with the F4 look editor (Step 3). Everything is drawn to a fixed 1280x720
 /// canvas that is scaled (letterboxed) to the window, so coordinates never depend on window size.
 /// </summary>
 internal static class Program
@@ -72,9 +74,12 @@ internal static class Program
         var arena = new TestArena();
         var clock = new FixedStepClock(TargetFps);
         var keyboard = new KeyboardSampler();
-        var browser = new AssetBrowserScreen();
+        var looks = new LookManager(steam);
+        var browser = new AssetBrowserScreen { Looks = looks };
+        var editor = new LookEditorScreen(looks);
         bool showDebug = false;
         bool showBrowser = false;
+        bool showEditor = false;
         double nextAutoRescan = Raylib.GetTime() + AutoRescanSeconds;
 
         while (!Raylib.WindowShouldClose())
@@ -85,33 +90,44 @@ internal static class Program
             if (keyboard.WasPressed(KeyboardKey.F3))
             {
                 showBrowser = !showBrowser;
+                showEditor = false;
                 if (showBrowser)
                 {
                     browser.Open(steam);
                 }
             }
 
+            if (keyboard.WasPressed(KeyboardKey.F4))
+            {
+                showEditor = !showEditor;
+                showBrowser = false;
+            }
+
             if (keyboard.WasPressed(KeyboardKey.F5))
             {
                 steam = SteamChecker.Check();
                 nextAutoRescan = Raylib.GetTime() + AutoRescanSeconds;
+                looks.Retry(steam);
                 if (showBrowser)
                 {
                     browser.Rescan(steam);
                 }
             }
 
-            if (!showBrowser && keyboard.WasPressed(KeyboardKey.F1))
+            bool inArena = !showBrowser && !showEditor;
+            if (inArena && keyboard.WasPressed(KeyboardKey.F1))
             {
                 showDebug = !showDebug;
             }
 
-            if (!showBrowser && keyboard.WasPressed(KeyboardKey.R))
+            if (inArena && keyboard.WasPressed(KeyboardKey.R))
             {
                 arena.ResetPositions();
             }
 
-            if (steam.ShouldBlockGameplay && !showBrowser && Raylib.GetTime() >= nextAutoRescan)
+            looks.Update();
+
+            if (steam.ShouldBlockGameplay && inArena && Raylib.GetTime() >= nextAutoRescan)
             {
                 steam = SteamChecker.Check();
                 nextAutoRescan = Raylib.GetTime() + AutoRescanSeconds;
@@ -124,6 +140,11 @@ internal static class Program
             {
                 keyboard.Clear();
                 browser.Update(keyboard);
+            }
+            else if (showEditor)
+            {
+                keyboard.Clear();
+                editor.Update(keyboard);
             }
             else if (steam.ShouldBlockGameplay)
             {
@@ -144,13 +165,17 @@ internal static class Program
             {
                 browser.Draw(VirtualWidth, VirtualHeight);
             }
+            else if (showEditor)
+            {
+                editor.Draw(VirtualWidth, VirtualHeight);
+            }
             else if (steam.ShouldBlockGameplay)
             {
                 UpdateRequiredScreen.Draw(steam, VirtualWidth, VirtualHeight, nextAutoRescan - Raylib.GetTime());
             }
             else
             {
-                ArenaRenderer.Draw(arena, showDebug, VirtualWidth, VirtualHeight);
+                ArenaRenderer.Draw(arena, showDebug, VirtualWidth, VirtualHeight, looks);
                 SteamStatusPanel.Draw(steam, VirtualWidth);
 
                 if (showDebug)
@@ -158,8 +183,9 @@ internal static class Program
                     DebugHud.Draw(arena, clock, steam, VirtualWidth);
                 }
 
+                DrawLookStatus(looks);
                 Ui.TextCentered(
-                    "A / D  move    W  jump    J  punch    R  reset    F1  hitboxes    F3  asset browser    F5  re-scan    ESC  quit",
+                    "A / D  move   W  jump   J  punch   R  reset   F1  hitboxes   F3  assets   F4  looks   F5  re-scan   ESC  quit",
                     VirtualWidth / 2, VirtualHeight - 34, 20, Theme.TextDim);
             }
 
@@ -179,7 +205,28 @@ internal static class Program
         }
 
         browser.Dispose();
+        looks.Dispose();
         Raylib.UnloadRenderTexture(canvas);
         Raylib.CloseWindow();
+    }
+
+    /// <summary>One line above the controls: look loading progress or problems, or how to set looks up.</summary>
+    private static void DrawLookStatus(LookManager looks)
+    {
+        const int y = 652;
+        string? p1 = looks.Status(LookSlot.Player1);
+        string? dummy = looks.Status(LookSlot.Dummy);
+
+        if (p1 is not null || dummy is not null)
+        {
+            string text = p1 is not null ? "P1 look: " + p1 : "Dummy look: " + dummy;
+            Color color = looks.IsLoading(LookSlot.Player1) || looks.IsLoading(LookSlot.Dummy) ? Theme.Warn : Theme.Bad;
+            Ui.TextCentered(Ui.FitEnd(text, 20, VirtualWidth - 80), VirtualWidth / 2, y, 20, color);
+        }
+        else if (looks.Get(LookSlot.Player1).IsEmpty && looks.Get(LookSlot.Dummy).IsEmpty)
+        {
+            Ui.TextCentered("Step 3: press F3, pick a Limbus sprite and press Ctrl+1 to put it on P1 (F4 shows how).",
+                VirtualWidth / 2, y, 20, Theme.Accent);
+        }
     }
 }
