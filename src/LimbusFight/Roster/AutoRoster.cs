@@ -139,6 +139,7 @@ public sealed class AutoRoster : IDisposable
             }
 
             int done = 0;
+            var bySinner = new Dictionary<string, LookData?>(StringComparer.OrdinalIgnoreCase);
             foreach ((string id, string sinner) in wanted)
             {
                 if (cancel.IsCancellationRequested || LimbusAssetRoots.IsGameRunning())
@@ -149,10 +150,16 @@ public sealed class AutoRoster : IDisposable
 
                 done++;
                 Status = $"Sinner looks: looking for {sinner} ({done} / {wanted.Count})...";
-                LookData? look = FindLook(sinner, files, cache, reader, cancel);
+                // Several Identities of one Sinner share the search (each gets its own copy of the look).
+                if (!bySinner.TryGetValue(sinner, out LookData? look))
+                {
+                    look = FindLook(sinner, files, cache, reader, cancel);
+                    bySinner[sinner] = look;
+                }
+
                 if (look is not null)
                 {
-                    _found.Enqueue((id, look));
+                    _found.Enqueue((id, LookStore.Deserialize(LookStore.Serialize(look))));
                 }
 
                 state.Tried.Add(sinner);

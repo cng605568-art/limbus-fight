@@ -14,7 +14,19 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 9 (testing):** Bosses.
+**Step 10 (testing):** the full roster.
+
+- **All 12 Sinners** (base LCB Identities): Yi Sang, Faust, Don Quixote, Ryoshu, Meursault, Hong Lu,
+  Heathcliff, Ishmael, Rodion, Sinclair, Outis and Gregor, each with three skills, their base ZAYIN
+  E.G.O (names and Sin costs as in Limbus), defense and passive. Numbers are fan-made.
+- **Extra Identities:** Blade Lineage Salsu Yi Sang, Shi South Section 5 Heathcliff and R Corp.
+  4th Pack Rabbit Heathcliff.
+- **Second Boss: Erlking Heathcliff** (The Wild Hunt). Boss Rush now has two Bosses.
+- **Arcade** picks five different Sinners per run, a random Identity of each, then the Bosses.
+- Balance is checked with CPU-vs-CPU tests: in a 15-fighter round robin no fighter wins more
+  than 85% or less than 15% of its matches.
+
+**Step 9 (done):** Bosses.
 
 - **Boss rules** (a `boss` block in the fighter file, editable in F2 under BOSS): **super armor**
   (hits during its wind-up and active frames hurt but do not interrupt; breaking its Stagger bar

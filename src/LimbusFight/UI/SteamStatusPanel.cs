@@ -39,7 +39,7 @@ public static class SteamStatusPanel
 
         // Row 0: title + build.
         Ui.Text("LIMBUS FIGHT", Margin, 12, 30, Theme.Accent);
-        Ui.Text("STEP 9  -  BOSSES", Margin + Ui.Measure("LIMBUS FIGHT", 30) + 18, 20, Font, Theme.TextDim);
+        Ui.Text("STEP 10  -  FULL ROSTER", Margin + Ui.Measure("LIMBUS FIGHT", 30) + 18, 20, Font, Theme.TextDim);
         Ui.TextRight($"v{AppInfo.Version}", right, 20, Font, Theme.TextDim);
 
         // Row 1: found / missing + verdict, and the version gate mode on the right.

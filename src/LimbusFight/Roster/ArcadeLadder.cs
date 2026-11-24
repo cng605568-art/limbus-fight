@@ -58,7 +58,17 @@ public sealed class ArcadeLadder
             .Where(t => t.Data.Sinner is not null && !t.Data.IsBoss && t.Id != playerId
                 && !string.Equals(t.Data.Sinner, playerSinner, StringComparison.OrdinalIgnoreCase))
             .GroupBy(t => t.Data.Sinner!, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.OrderByDescending(t => t.Data.Preset > 0).ThenBy(t => t.Id, StringComparer.Ordinal).First().Id)
+            .Select(g =>
+            {
+                // One Identity per Sinner, a different one per run (built-in fighters only, if any).
+                var ids = g.Where(t => t.Data.Preset > 0).OrderBy(t => t.Id, StringComparer.Ordinal).ToList();
+                if (ids.Count == 0)
+                {
+                    ids = g.OrderBy(t => t.Id, StringComparer.Ordinal).ToList();
+                }
+
+                return ids[(int)(Mix(seed, g.Key) % (uint)ids.Count)].Id;
+            })
             .ToList();
 
         Shuffle(sinners, seed);
@@ -84,6 +94,18 @@ public sealed class ArcadeLadder
 
     /// <summary>True for a Boss Rush (single rounds, Bosses only).</summary>
     public bool IsBossRush { get; private init; }
+
+    /// <summary>A stable number from the seed and a name (FNV-1a), so the same seed picks the same Identities.</summary>
+    private static uint Mix(uint seed, string name)
+    {
+        uint h = 2166136261u ^ seed;
+        foreach (char c in name.ToLowerInvariant())
+        {
+            h = (h ^ c) * 16777619u;
+        }
+
+        return h;
+    }
 
     private static void Shuffle(List<string> items, uint seed)
     {
