@@ -30,12 +30,57 @@ public sealed class BoxEditorScreen
     private const int IdleTail = 20;
 
     private sealed record Field(string Section, string Label, string Unit, float Step, float BigStep, bool Whole,
-        Func<FighterData, float> Get, Action<FighterData, float> Set, Func<FighterData, float> Default);
+        Func<FighterData, float> Get, Action<FighterData, float> Set, Func<FighterData, float> Default)
+    {
+        /// <summary>For choice fields (type, Sin, status): how the value reads, and how many choices wrap around.</summary>
+        public Func<float, string>? Format { get; init; }
+
+        public int Choices { get; init; }
+    }
+
+    private static readonly string[] StatusChoices = { "none", "Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge" };
+
+    private static Field Resist(string label, Func<FighterData, float> get, Action<FighterData, float> set) =>
+        new("COMBAT", label, "x", 0.25f, 0.5f, false, get, set, _ => 1f) { Format = v => $"{v:0.##} {CombatRules.ResistLabel(v)}" };
+
+    /// <summary>A status slot (the first entry of a move's on-hit list): kind, potency, count.</summary>
+    private static Field[] StatusFields(string label, Func<FighterData, List<StatusData>> list) => new[]
+    {
+        new Field("PUNCH (J)", label, string.Empty, 1, 1, true,
+            d => list(d).Count == 0 ? 0 : (int)list(d)[0].Status + 1,
+            (d, v) =>
+            {
+                List<StatusData> l = list(d);
+                int choice = (((int)v % StatusChoices.Length) + StatusChoices.Length) % StatusChoices.Length;
+                if (choice == 0)
+                {
+                    l.Clear();
+                }
+                else if (l.Count == 0)
+                {
+                    l.Add(new StatusData { Status = (StatusKind)(choice - 1), Potency = 2, Count = 3 });
+                }
+                else
+                {
+                    l[0].Status = (StatusKind)(choice - 1);
+                }
+            },
+            _ => 0)
+        { Format = v => StatusChoices[(int)v], Choices = StatusChoices.Length },
+        new Field("PUNCH (J)", "   potency", string.Empty, 1, 5, true,
+            d => list(d).Count == 0 ? 0 : list(d)[0].Potency,
+            (d, v) => { if (list(d).Count > 0) { list(d)[0].Potency = Math.Max(1, (int)v); } },
+            d => list(d).Count == 0 ? 0 : 2),
+        new Field("PUNCH (J)", "   count", string.Empty, 1, 5, true,
+            d => list(d).Count == 0 ? 0 : list(d)[0].Count,
+            (d, v) => { if (list(d).Count > 0) { list(d)[0].Count = Math.Max(1, (int)v); } },
+            d => list(d).Count == 0 ? 0 : 3),
+    };
 
     private static readonly FighterData Defaults = new();
 
     private static readonly Field[] Fields =
-    {
+    [
         new("BODY", "Hurtbox width", "px", 2, 10, true, d => d.Body.HurtboxWidth, (d, v) => d.Body.HurtboxWidth = v, _ => Defaults.Body.HurtboxWidth),
         new("BODY", "Hurtbox height", "px", 2, 10, true, d => d.Body.HurtboxHeight, (d, v) => d.Body.HurtboxHeight = v, _ => Defaults.Body.HurtboxHeight),
         new("BODY", "Pushbox width", "px", 2, 10, true, d => d.Body.PushboxWidth, (d, v) => d.Body.PushboxWidth = v, _ => Defaults.Body.PushboxWidth),
@@ -49,6 +94,21 @@ public sealed class BoxEditorScreen
         new("MOVEMENT", "Jump crouch", "frames", 1, 5, true, d => d.Movement.JumpSquatFrames, (d, v) => d.Movement.JumpSquatFrames = (int)v, _ => Defaults.Movement.JumpSquatFrames),
         new("MOVEMENT", "Landing", "frames", 1, 5, true, d => d.Movement.LandingFrames, (d, v) => d.Movement.LandingFrames = (int)v, _ => Defaults.Movement.LandingFrames),
 
+        new("COMBAT", "Max HP", string.Empty, 5, 25, true, d => d.Combat.MaxHp, (d, v) => d.Combat.MaxHp = (int)v, _ => Defaults.Combat.MaxHp),
+        new("COMBAT", "Stagger bar", string.Empty, 2, 10, true, d => d.Combat.StaggerMax, (d, v) => d.Combat.StaggerMax = (int)v, _ => Defaults.Combat.StaggerMax),
+        Resist("Slash resist", d => d.Combat.SlashResist, (d, v) => d.Combat.SlashResist = v),
+        Resist("Pierce resist", d => d.Combat.PierceResist, (d, v) => d.Combat.PierceResist = v),
+        Resist("Blunt resist", d => d.Combat.BluntResist, (d, v) => d.Combat.BluntResist = v),
+
+        new("PUNCH (J)", "Damage", string.Empty, 1, 5, true, d => d.Punch.Damage, (d, v) => d.Punch.Damage = (int)v, _ => Defaults.Punch.Damage),
+        new("PUNCH (J)", "Stagger damage", string.Empty, 1, 5, true, d => d.Punch.StaggerDamage, (d, v) => d.Punch.StaggerDamage = (int)v, _ => Defaults.Punch.StaggerDamage),
+        new("PUNCH (J)", "Clash power", string.Empty, 1, 5, false, d => d.Punch.ClashPower, (d, v) => d.Punch.ClashPower = v, _ => Defaults.Punch.ClashPower),
+        new("PUNCH (J)", "Damage type", string.Empty, 1, 1, true, d => (int)d.Punch.DamageType, (d, v) => d.Punch.DamageType = (DamageType)(((int)v % 3 + 3) % 3), _ => (int)Defaults.Punch.DamageType)
+        { Format = v => ((DamageType)(int)v).ToString(), Choices = 3 },
+        new("PUNCH (J)", "Sin", string.Empty, 1, 1, true, d => (int)d.Punch.Sin, (d, v) => d.Punch.Sin = (Sin)(((int)v % 7 + 7) % 7), _ => (int)Defaults.Punch.Sin)
+        { Format = v => ((Sin)(int)v).ToString(), Choices = 7 },
+        .. StatusFields("On hit, opponent gets", d => d.Punch.OnHit),
+        .. StatusFields("On hit, puncher gains", d => d.Punch.SelfOnHit),
         new("PUNCH (J)", "Startup", "frames", 1, 5, true, d => d.Punch.Startup, (d, v) => d.Punch.Startup = (int)v, _ => Defaults.Punch.Startup),
         new("PUNCH (J)", "Active", "frames", 1, 5, true, d => d.Punch.Active, (d, v) => d.Punch.Active = (int)v, _ => Defaults.Punch.Active),
         new("PUNCH (J)", "Recovery", "frames", 1, 5, true, d => d.Punch.Recovery, (d, v) => d.Punch.Recovery = (int)v, _ => Defaults.Punch.Recovery),
@@ -60,7 +120,7 @@ public sealed class BoxEditorScreen
         new("PUNCH (J)", "Hitbox width", "px", 2, 10, true, d => d.Punch.Hitbox.Width, (d, v) => d.Punch.Hitbox.Width = v, _ => Defaults.Punch.Hitbox.Width),
         new("PUNCH (J)", "Hitbox height", "px", 2, 10, true, d => d.Punch.Hitbox.Height, (d, v) => d.Punch.Hitbox.Height = v, _ => Defaults.Punch.Hitbox.Height),
         new("PUNCH (J)", "Arm hurtbox width", "px", 2, 10, true, d => d.Punch.ArmHurtboxWidth, (d, v) => d.Punch.ArmHurtboxWidth = v, _ => Defaults.Punch.ArmHurtboxWidth),
-    };
+    ];
 
     private readonly RosterManager _roster;
     private readonly LookManager _looks;
@@ -143,7 +203,9 @@ public sealed class BoxEditorScreen
             if (dir != 0)
             {
                 float step = shift ? field.BigStep : field.Step;
-                float value = MathF.Round((field.Get(Fighter) + (dir * step)) / field.Step) * field.Step;
+                float value = field.Choices > 0
+                    ? (((int)field.Get(Fighter) + dir) % field.Choices + field.Choices) % field.Choices
+                    : MathF.Round((field.Get(Fighter) + (dir * step)) / field.Step) * field.Step;
                 _roster.Edit(_slot, d => field.Set(d, field.Whole ? MathF.Round(value) : value));
             }
 
@@ -329,7 +391,7 @@ public sealed class BoxEditorScreen
 
             float value = field.Get(Fighter);
             bool changed = MathF.Abs(value - field.Default(Fighter)) > 0.0001f;
-            string text = field.Whole ? $"{value:0}" : $"{value:0.##}";
+            string text = field.Format is not null ? field.Format(value) : field.Whole ? $"{value:0}" : $"{value:0.##}";
             Ui.Text(field.Label, ListX + 24, y + 1, Font, selected ? Theme.Text : Theme.TextDim);
             Ui.TextRight($"{(selected ? "< " : string.Empty)}{text}{(selected ? " >" : string.Empty)}  {field.Unit}", ListX + ListW - 12, y + 1, Font, changed ? Theme.Warn : Theme.Text);
             y += RowH;

@@ -33,6 +33,7 @@ public static class FighterStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
     /// <summary>%LOCALAPPDATA%\LimbusFight\fighters (overridable for tests).</summary>

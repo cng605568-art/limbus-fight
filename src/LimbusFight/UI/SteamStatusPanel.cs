@@ -11,6 +11,24 @@ public static class SteamStatusPanel
     private const int Margin = 20;
     private const int Font = 20;
 
+    /// <summary>Height of the one-line version shown above the match HUD.</summary>
+    public const int CompactHeight = 26;
+
+    /// <summary>One line: game found / verdict, buildid, version gate, build. Full details: F3 report / F5.</summary>
+    public static void DrawCompact(SteamCheckResult r, int width)
+    {
+        Raylib.DrawRectangle(0, 0, width, CompactHeight, Theme.Panel);
+        Raylib.DrawRectangle(0, CompactHeight - 1, width, 1, Theme.PanelBorder);
+        const int font = 18;
+        (string label, Color color) = StatusStyle(r.Status);
+        int x = Ui.LabelValue("Limbus Company:", r.GameFound ? "FOUND" : "MISSING", 10, 4, font, r.GameFound ? Theme.Good : Theme.Bad);
+        Ui.Text(label, x + 12, 4, font, color);
+        x += 12 + Ui.Measure(label, font);
+        x = Ui.LabelValue("buildid:", r.BuildIdDisplay, x + 24, 4, font, r.BuildId is null ? Theme.TextDim : Theme.Text);
+        Ui.LabelValue("version check:", r.BypassVersionCheck ? "bypassed" : "on", x + 24, 4, font, r.BypassVersionCheck ? Theme.Warn : Theme.Good);
+        Ui.TextRight($"LIMBUS FIGHT  step 5 debug build  v{AppInfo.Version}", width - 10, 4, font, Theme.TextDim);
+    }
+
     public static void Draw(SteamCheckResult r, int width)
     {
         Raylib.DrawRectangle(0, 0, width, Height, Theme.Panel);
@@ -21,7 +39,7 @@ public static class SteamStatusPanel
 
         // Row 0: title + build.
         Ui.Text("LIMBUS FIGHT", Margin, 12, 30, Theme.Accent);
-        Ui.Text("STEP 3  -  SPRITES DEBUG BUILD", Margin + Ui.Measure("LIMBUS FIGHT", 30) + 18, 20, Font, Theme.TextDim);
+        Ui.Text("STEP 5  -  COMBAT DEBUG BUILD", Margin + Ui.Measure("LIMBUS FIGHT", 30) + 18, 20, Font, Theme.TextDim);
         Ui.TextRight($"v{AppInfo.Version}", right, 20, Font, Theme.TextDim);
 
         // Row 1: found / missing + verdict, and the version gate mode on the right.

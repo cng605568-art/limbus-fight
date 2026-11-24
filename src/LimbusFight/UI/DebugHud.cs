@@ -15,7 +15,7 @@ public static class DebugHud
         const int w = 430;
         const int h = 246;
         int x = canvasWidth - w - 16;
-        int y = SteamStatusPanel.Height + 14;
+        int y = MatchHud.Bottom + 10;
 
         Raylib.DrawRectangle(x, y, w, h, Theme.Panel);
         Raylib.DrawRectangleLines(x, y, w, h, Theme.PanelBorder);

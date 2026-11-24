@@ -58,8 +58,8 @@ public static class ArenaRenderer
         Raylib.DrawLineEx(new Vector2(0, floorY), new Vector2(width, floorY), 3f, Theme.Accent);
 
         // Stage walls.
-        Raylib.DrawRectangle(0, SteamStatusPanel.Height, (int)TestArena.WallLeft, floorY - SteamStatusPanel.Height, Theme.Wall);
-        Raylib.DrawRectangle((int)TestArena.WallRight, SteamStatusPanel.Height, width - (int)TestArena.WallRight, floorY - SteamStatusPanel.Height, Theme.Wall);
+        Raylib.DrawRectangle(0, MatchHud.Bottom, (int)TestArena.WallLeft, floorY - MatchHud.Bottom, Theme.Wall);
+        Raylib.DrawRectangle((int)TestArena.WallRight, MatchHud.Bottom, width - (int)TestArena.WallRight, floorY - MatchHud.Bottom, Theme.Wall);
     }
 
     private static void DrawShadow(Fighter f)

@@ -14,7 +14,29 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 4 (testing):** fighters as data.
+**Step 5 (testing):** core combat. A full round plays out against the dummy.
+
+- **Health and K.O.:** rounds of 60 seconds; K.O. or time over (more health wins) ends a round, the
+  next starts by itself, and wins are counted. R restarts the round.
+- **Stagger:** every hit takes Stagger damage; an empty bar Staggers the fighter for 2 seconds
+  (cannot act, takes x1.5 damage), then the bar refills.
+- **Sanity (SP, -45 to +45):** landing hits and winning clashes raise it, taking hits and losing
+  clashes lower it. It changes damage by up to +/-10% instead of coin flips. At -45 the fighter
+  Panics for 3 seconds (less damage, no Sin gain), then returns to 0.
+- **Clashes:** when both hitboxes are out and touch, the higher clash power (move + Sanity) wins:
+  the loser's attack is cancelled and it is knocked back; equal power cancels both.
+- **Damage types and resistances:** Slash / Pierce / Blunt multipliers per fighter, shown as
+  Fatal / Weak / Normal / Endured / Ineffective on hit.
+- **Sins:** landing a move fills its Sin's resource (seven pips in the HUD), for E.G.O in Step 6.
+- **Statuses** (potency x count): Burn ticks every second, Bleed hurts when its bearer attacks,
+  Tremor adds Stagger damage, Rupture adds damage, Sinking drains Sanity, Poise fills a crit meter
+  (no randomness: a crit every time it reaches 100), Charge is stored for Step 6 moves.
+- **F6:** the dummy stands still, or fights back (walks in and punches), so clashes, trades and
+  being knocked out can be tested.
+- **F2** edits HP, Stagger bar, resistances, and the punch's damage, Stagger damage, clash power,
+  damage type, Sin and the statuses it gives or gains. The whole fight is deterministic.
+
+**Step 4 (done):** fighters as data.
 
 - **One file per fighter** in `%LOCALAPPDATA%\LimbusFight\fighters\<name>.json`: name, body boxes
   (hurtbox, pushbox), movement (walk speeds, jump, gravity, crouch / landing frames), moves with
@@ -114,7 +136,9 @@ LimbusFight/
     │   ├── AutoLook.cs              sorts a file's sprites into clips by name (or shape)
     │   └── ClipPicker.cs            fighter state -> clip + frame (punch synced to its frames)
     ├── Gameplay/                    pure simulation (no Raylib types)
-    │   ├── Box.cs  FrameInput.cs  AttackData.cs  FighterStats.cs  Fighter.cs  TestArena.cs
+    │   ├── Box.cs  FrameInput.cs  AttackData.cs  FighterStats.cs  Fighter.cs
+    │   ├── Combat.cs                Sins, damage types, statuses, combat constants
+    │   └── TestArena.cs             rounds, hits, clashes, statuses, the fighting dummy
     ├── Input/KeyboardSampler.cs     keyboard -> per-tick input
     ├── Rendering/                   stage, fighters, debug boxes, window scaling, look textures
     ├── UI/                          status panel, update screen, debug HUD, asset browser, look + fighter editors, theme
@@ -137,11 +161,12 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | A / D | walk |
 | W | jump |
 | J | punch |
-| R | reset positions |
+| R | restart the round |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
 | F2 | fighter editor (Tab P1 / Dummy, `[` `]` switch fighter, Ctrl+N new fighter, Enter on the name rename, Up/Down pick, Left/Right change, Shift bigger steps, Del reset value, Space play / pause, `,` `.` step frames) |
 | F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+6 / 7 to the swing / hit effect, Ctrl+A auto look from the open file, Ctrl+Z undo it, add Shift for the Dummy, Ctrl+O open exports, Ctrl+R report) |
 | F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
+| F6 | dummy: stand still / fight back |
 | F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |
 | ESC | quit |
 

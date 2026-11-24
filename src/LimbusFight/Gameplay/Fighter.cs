@@ -10,6 +10,15 @@ public enum FighterState
     Landing,
     Attack,
     Hitstun,
+
+    /// <summary>Stagger bar emptied: cannot act, takes extra damage (Step 5).</summary>
+    Staggered,
+
+    /// <summary>Lost (or tied) a clash: knocked back, briefly unable to act.</summary>
+    ClashRecoil,
+
+    /// <summary>Knocked out: health reached 0.</summary>
+    Down,
 }
 
 /// <summary>
@@ -42,6 +51,7 @@ public sealed class Fighter
         IsDummy = isDummy;
         State = FighterState.Idle;
         StateFrame = 0;
+        ResetCombat();
     }
 
     public string Name { get; }
@@ -99,7 +109,7 @@ public sealed class Fighter
     public void ReadInput(FrameInput input, bool frozen)
     {
         _previousHeld = _held;
-        _held = IsDummy ? InputButtons.None : input.Held;
+        _held = input.Held; // the arena decides what the dummy presses (stand still or fight back)
 
         InputButtons pressed = _held & ~_previousHeld;
 
@@ -117,6 +127,12 @@ public sealed class Fighter
     public void Update()
     {
         StateFrame++;
+        StartedAttack = false;
+
+        if (PanicRemaining > 0 && --PanicRemaining == 0)
+        {
+            Sanity = 0; // Panic is over: back to a calm mind
+        }
 
         // 1. Timed states expire at the start of the frame after their last frame.
         switch (State)
@@ -138,6 +154,16 @@ public sealed class Fighter
                 ComboCount = 0;
                 Enter(FighterState.Idle);
                 break;
+
+            case FighterState.Staggered when StaggerRemaining <= 0:
+                Stagger = Stats.StaggerMax;
+                ComboCount = 0;
+                Enter(FighterState.Idle);
+                break;
+
+            case FighterState.ClashRecoil when RecoilRemaining <= 0:
+                Enter(FighterState.Idle);
+                break;
         }
 
         // 2. Neutral: walk / jump / attack.
@@ -145,7 +171,8 @@ public sealed class Fighter
         {
             HandleNeutral();
         }
-        else if (State is FighterState.JumpSquat or FighterState.Landing or FighterState.Attack or FighterState.Hitstun)
+        else if (State is FighterState.JumpSquat or FighterState.Landing or FighterState.Attack or FighterState.Hitstun
+                 or FighterState.Staggered or FighterState.ClashRecoil or FighterState.Down)
         {
             VelocityX = 0f;
         }
@@ -153,6 +180,14 @@ public sealed class Fighter
         if (State == FighterState.Hitstun)
         {
             HitstunRemaining--;
+        }
+        else if (State == FighterState.Staggered)
+        {
+            StaggerRemaining--;
+        }
+        else if (State == FighterState.ClashRecoil)
+        {
+            RecoilRemaining--;
         }
 
         // 3. Physics.
@@ -212,6 +247,22 @@ public sealed class Fighter
         _punchBuffer = 0;
         State = FighterState.Idle;
         StateFrame = 0;
+        ResetCombat();
+    }
+
+    /// <summary>Full health and Stagger bar, calm Sanity, no Sins or statuses (start of a round).</summary>
+    public void ResetCombat()
+    {
+        Hp = Stats.MaxHp;
+        Stagger = Stats.StaggerMax;
+        Sanity = 0;
+        PanicRemaining = 0;
+        CritMeter = 0;
+        BurnTimer = 0;
+        StaggerRemaining = 0;
+        RecoilRemaining = 0;
+        Array.Clear(Sins);
+        Array.Clear(Statuses);
     }
 
     /// <summary>Swaps in another fighter's stats (a different data file, or an edit) and returns to idle in place.</summary>
@@ -236,13 +287,133 @@ public sealed class Fighter
     /// <summary>Called by the arena when this fighter is hit.</summary>
     public void TakeHit(AttackData attack)
     {
-        bool comboing = State == FighterState.Hitstun;
+        bool comboing = State is FighterState.Hitstun or FighterState.Staggered;
         ComboCount = comboing ? ComboCount + 1 : 1;
         HitsTaken++;
-        HitstunRemaining = attack.Hitstun;
         CurrentAttack = null;
         VelocityX = 0f;
+
+        // A Staggered (or knocked out) fighter stays that way; hits do not restart hitstun.
+        if (State is FighterState.Staggered or FighterState.Down)
+        {
+            return;
+        }
+
+        HitstunRemaining = attack.Hitstun;
         Enter(FighterState.Hitstun);
+    }
+
+    // =========================================================================================
+    //  Combat state (Step 5). The rules that change it live in TestArena / CombatRules.
+    // =========================================================================================
+
+    public int Hp { get; set; }
+
+    /// <summary>What is left of the Stagger bar (0 = Staggered).</summary>
+    public int Stagger { get; set; }
+
+    /// <summary>Sanity, -45 (Panic) to +45.</summary>
+    public int Sanity { get; private set; }
+
+    public int PanicRemaining { get; private set; }
+
+    public bool IsPanicking => PanicRemaining > 0;
+
+    /// <summary>Sin resources, indexed by <see cref="Gameplay.Sin"/>.</summary>
+    public int[] Sins { get; } = new int[7];
+
+    /// <summary>Status stacks, indexed by <see cref="StatusKind"/>.</summary>
+    public StatusStack[] Statuses { get; } = new StatusStack[7];
+
+    /// <summary>Poise's crit meter (deterministic stand-in for Limbus's crit chance).</summary>
+    public int CritMeter { get; set; }
+
+    /// <summary>Frames since Burn last dealt damage.</summary>
+    public int BurnTimer { get; set; }
+
+    public int StaggerRemaining { get; private set; }
+
+    public int RecoilRemaining { get; private set; }
+
+    /// <summary>True on the frame an attack began (Bleed hurts then).</summary>
+    public bool StartedAttack { get; private set; }
+
+    public ref StatusStack Status(StatusKind kind) => ref Statuses[(int)kind];
+
+    public void AddStatus(StatusApply apply)
+    {
+        ref StatusStack stack = ref Status(apply.Kind);
+        stack.Potency = Math.Min(CombatRules.StatusCap, stack.Potency + apply.Potency);
+        stack.Count = Math.Min(CombatRules.StatusCap, stack.Count + apply.Count);
+    }
+
+    /// <summary>Uses up one count of a status; the stack is gone when its count reaches 0.</summary>
+    public int ConsumeStatus(StatusKind kind)
+    {
+        ref StatusStack stack = ref Status(kind);
+        if (!stack.Active)
+        {
+            return 0;
+        }
+
+        int potency = stack.Potency;
+        if (--stack.Count <= 0)
+        {
+            stack = default;
+        }
+
+        return potency;
+    }
+
+    /// <summary>Changes Sanity. Returns true if this pushed the fighter into Panic.</summary>
+    public bool AddSanity(int delta)
+    {
+        if (IsPanicking)
+        {
+            return false;
+        }
+
+        Sanity = Math.Clamp(Sanity + delta, CombatRules.SanityMin, CombatRules.SanityMax);
+        if (Sanity <= CombatRules.SanityMin)
+        {
+            PanicRemaining = CombatRules.PanicFrames;
+            return true;
+        }
+
+        return false;
+    }
+
+    public void AddSin(Sin sin)
+    {
+        if (!IsPanicking)
+        {
+            Sins[(int)sin] = Math.Min(CombatRules.SinCap, Sins[(int)sin] + 1);
+        }
+    }
+
+    public void EnterStaggered()
+    {
+        CurrentAttack = null;
+        VelocityX = 0f;
+        StaggerRemaining = CombatRules.StaggerFrames;
+        Enter(FighterState.Staggered);
+    }
+
+    /// <summary>Clash lost or tied: the attack is cancelled and the fighter slides back.</summary>
+    public void EnterClashRecoil(int frames, float push)
+    {
+        CurrentAttack = null;
+        VelocityX = 0f;
+        PushbackVelocity = -Facing * push;
+        RecoilRemaining = frames;
+        Enter(FighterState.ClashRecoil);
+    }
+
+    public void EnterDown()
+    {
+        CurrentAttack = null;
+        VelocityX = 0f;
+        Enter(FighterState.Down);
     }
 
     // =========================================================================================
@@ -331,6 +502,8 @@ public sealed class Fighter
         FighterState.Attack when CurrentAttack is not null =>
             $"{CurrentAttack.Name} {StateFrame}/{CurrentAttack.TotalFrames} {CurrentAttack.PhaseAt(StateFrame)}",
         FighterState.Hitstun => $"Hitstun ({HitstunRemaining} left)",
+        FighterState.Staggered => $"STAGGERED ({StaggerRemaining} left)",
+        FighterState.ClashRecoil => $"Clash recoil ({RecoilRemaining} left)",
         FighterState.JumpSquat => $"JumpSquat {StateFrame}/{Stats.JumpSquatFrames}",
         FighterState.Landing => $"Landing {StateFrame}/{Stats.LandingFrames}",
         _ => $"{State} f{StateFrame}",
@@ -348,6 +521,7 @@ public sealed class Fighter
             CurrentAttack = Stats.Punch;
             AttackConnected = false;
             VelocityX = 0f;
+            StartedAttack = true;
             Enter(FighterState.Attack);
             return;
         }

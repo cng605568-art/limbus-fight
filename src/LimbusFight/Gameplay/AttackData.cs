@@ -40,6 +40,28 @@ public sealed record AttackData
     /// <summary>Extended-limb hurtbox (usually a little shorter than the hitbox).</summary>
     public required float LimbHurtboxWidth { get; init; }
 
+    // ---- Step 5: combat --------------------------------------------------------------------
+
+    /// <summary>Health damage before resistances, Sanity and Stagger.</summary>
+    public int Damage { get; init; } = 8;
+
+    /// <summary>How much of the defender's Stagger bar a hit takes.</summary>
+    public int StaggerDamage { get; init; } = 6;
+
+    /// <summary>When two hitboxes meet, the higher clash power wins.</summary>
+    public float ClashPower { get; init; } = 10f;
+
+    public DamageType DamageType { get; init; } = DamageType.Blunt;
+
+    /// <summary>The Sin whose resource fills when this lands.</summary>
+    public Sin Sin { get; init; } = Sin.Wrath;
+
+    /// <summary>Statuses added to the defender on hit.</summary>
+    public IReadOnlyList<StatusApply> OnHit { get; init; } = Array.Empty<StatusApply>();
+
+    /// <summary>Statuses the attacker gains on hit (e.g. Poise, Charge).</summary>
+    public IReadOnlyList<StatusApply> SelfOnHit { get; init; } = Array.Empty<StatusApply>();
+
     public int TotalFrames => Startup + Active + Recovery;
 
     public int FirstActiveFrame => Startup + 1;

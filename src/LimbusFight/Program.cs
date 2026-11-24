@@ -159,6 +159,11 @@ internal static class Program
                 arena.ResetPositions();
             }
 
+            if (inArena && keyboard.WasPressed(KeyboardKey.F6))
+            {
+                arena.DummyMode = arena.DummyMode == DummyMode.Stand ? DummyMode.Fight : DummyMode.Stand;
+            }
+
             looks.Update();
 
             if (steam.ShouldBlockGameplay && inArena && Raylib.GetTime() >= nextAutoRescan)
@@ -219,16 +224,18 @@ internal static class Program
             else
             {
                 ArenaRenderer.Draw(arena, showDebug, VirtualWidth, VirtualHeight, looks);
-                SteamStatusPanel.Draw(steam, VirtualWidth);
+                MatchHud.DrawPopups(arena, VirtualWidth);
+                SteamStatusPanel.DrawCompact(steam, VirtualWidth);
+                MatchHud.Draw(arena, VirtualWidth);
 
                 if (showDebug)
                 {
                     DebugHud.Draw(arena, clock, steam, VirtualWidth);
                 }
 
-                DrawLookStatus(looks);
+                DrawLookStatus(looks, arena);
                 Ui.TextCentered(
-                    "A/D  move   W  jump   J  punch   R  reset   F1  boxes   F2  fighter   F3  assets   F4  looks   F5  rescan   ESC  quit",
+                    "A/D move  W jump  J punch  R restart round  F1 boxes  F2 fighter  F3 assets  F4 looks  F6 dummy  ESC quit",
                     VirtualWidth / 2, VirtualHeight - 34, 20, Theme.TextDim);
             }
 
@@ -254,9 +261,11 @@ internal static class Program
     }
 
     /// <summary>One line above the controls: look loading progress or problems, or how to set looks up.</summary>
-    private static void DrawLookStatus(LookManager looks)
+    private static void DrawLookStatus(LookManager looks, TestArena arena)
     {
         const int y = 652;
+        string dummyMode = arena.DummyMode == DummyMode.Stand ? "Dummy: stands still (F6: fight back)" : "Dummy: fights back (F6: stand still)";
+        Ui.Text(dummyMode, 20, y, 18, arena.DummyMode == DummyMode.Stand ? Theme.TextDim : Theme.Warn);
         string? p1 = looks.Status(LookSlot.Player1);
         string? dummy = looks.Status(LookSlot.Dummy);
 
@@ -264,12 +273,11 @@ internal static class Program
         {
             string text = p1 is not null ? "P1 look: " + p1 : "Dummy look: " + dummy;
             Color color = looks.IsLoading(LookSlot.Player1) || looks.IsLoading(LookSlot.Dummy) ? Theme.Warn : Theme.Bad;
-            Ui.TextCentered(Ui.FitEnd(text, 20, VirtualWidth - 80), VirtualWidth / 2, y, 20, color);
+            Ui.TextRight(Ui.FitEnd(text, 18, (VirtualWidth / 2) - 40), VirtualWidth - 20, y, 18, color);
         }
         else if (looks.Get(LookSlot.Player1).IsEmpty && looks.Get(LookSlot.Dummy).IsEmpty)
         {
-            Ui.TextCentered("Step 3: press F3, pick a Limbus sprite and press Ctrl+1 to put it on P1 (F4 shows how).",
-                VirtualWidth / 2, y, 20, Theme.Accent);
+            Ui.TextRight("F3, open a Limbus sprite file, Ctrl+A: P1 gets a look", VirtualWidth - 20, y, 18, Theme.Accent);
         }
     }
 }

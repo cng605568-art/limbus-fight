@@ -33,6 +33,26 @@ public sealed record FighterStats
 
     public int LandingFrames { get; init; } = 3;
 
+    // ---- Combat (Step 5) -------------------------------------------------------------------
+    public int MaxHp { get; init; } = 100;
+
+    /// <summary>Size of the Stagger bar; when hits empty it, the fighter is Staggered.</summary>
+    public int StaggerMax { get; init; } = 40;
+
+    /// <summary>Damage multipliers by type: 2 = Fatal, 1 = Normal, 0.5 = Ineffective.</summary>
+    public float SlashResist { get; init; } = 1f;
+
+    public float PierceResist { get; init; } = 1f;
+
+    public float BluntResist { get; init; } = 1f;
+
+    public float Resist(DamageType type) => type switch
+    {
+        DamageType.Slash => SlashResist,
+        DamageType.Pierce => PierceResist,
+        _ => BluntResist,
+    };
+
     // ---- Moves -----------------------------------------------------------------------------
     /// <summary>The move on the punch button (J).</summary>
     public AttackData Punch { get; init; } = AttackData.TestPunch;

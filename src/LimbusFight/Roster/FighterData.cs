@@ -28,6 +28,33 @@ public sealed class BodyData
     public float PushboxHeight { get; set; } = FighterStats.Default.PushboxHeight;
 }
 
+/// <summary>Health, Stagger bar and resistances (Step 5).</summary>
+public sealed class CombatData
+{
+    public int MaxHp { get; set; } = FighterStats.Default.MaxHp;
+
+    public int StaggerMax { get; set; } = FighterStats.Default.StaggerMax;
+
+    /// <summary>Damage multipliers: 2 = Fatal, 1.5 = Weak, 1 = Normal, 0.75 = Endured, 0.5 = Ineffective.</summary>
+    public float SlashResist { get; set; } = 1f;
+
+    public float PierceResist { get; set; } = 1f;
+
+    public float BluntResist { get; set; } = 1f;
+}
+
+/// <summary>A status a move applies, as written in the fighter file.</summary>
+public sealed class StatusData
+{
+    public StatusKind Status { get; set; } = StatusKind.Burn;
+
+    public int Potency { get; set; } = 1;
+
+    public int Count { get; set; } = 1;
+
+    public StatusApply ToApply() => new(Status, Potency, Count);
+}
+
 /// <summary>Walking and jumping, per 60 Hz frame.</summary>
 public sealed class MovementData
 {
@@ -79,6 +106,22 @@ public sealed class MoveData
     /// <summary>How far the extended arm can be hit, from the last startup frame through recovery.</summary>
     public float ArmHurtboxWidth { get; set; } = AttackData.TestPunch.LimbHurtboxWidth;
 
+    public int Damage { get; set; } = AttackData.TestPunch.Damage;
+
+    public int StaggerDamage { get; set; } = AttackData.TestPunch.StaggerDamage;
+
+    public float ClashPower { get; set; } = AttackData.TestPunch.ClashPower;
+
+    public DamageType DamageType { get; set; } = AttackData.TestPunch.DamageType;
+
+    public Sin Sin { get; set; } = AttackData.TestPunch.Sin;
+
+    /// <summary>Statuses put on the opponent when it hits.</summary>
+    public List<StatusData> OnHit { get; set; } = new();
+
+    /// <summary>Statuses the attacker gains when it hits.</summary>
+    public List<StatusData> SelfOnHit { get; set; } = new();
+
     public AttackData ToAttack() => new()
     {
         Name = Name,
@@ -93,6 +136,13 @@ public sealed class MoveData
         HitboxWidth = Hitbox.Width,
         HitboxHeight = Hitbox.Height,
         LimbHurtboxWidth = ArmHurtboxWidth,
+        Damage = Damage,
+        StaggerDamage = StaggerDamage,
+        ClashPower = ClashPower,
+        DamageType = DamageType,
+        Sin = Sin,
+        OnHit = OnHit.Select(st => st.ToApply()).ToArray(),
+        SelfOnHit = SelfOnHit.Select(st => st.ToApply()).ToArray(),
     };
 }
 
@@ -112,6 +162,8 @@ public sealed class FighterData
     public BodyData Body { get; set; } = new();
 
     public MovementData Movement { get; set; } = new();
+
+    public CombatData Combat { get; set; } = new();
 
     public List<MoveData> Moves { get; set; } = new() { new MoveData() };
 
@@ -149,6 +201,11 @@ public sealed class FighterData
         JumpHorizontalSpeed = Movement.JumpForwardSpeed,
         JumpSquatFrames = Movement.JumpSquatFrames,
         LandingFrames = Movement.LandingFrames,
+        MaxHp = Combat.MaxHp,
+        StaggerMax = Combat.StaggerMax,
+        SlashResist = Combat.SlashResist,
+        PierceResist = Combat.PierceResist,
+        BluntResist = Combat.BluntResist,
         Punch = Punch.ToAttack(),
     };
 
@@ -163,6 +220,12 @@ public sealed class FighterData
 
         Body ??= new BodyData();
         Movement ??= new MovementData();
+        Combat ??= new CombatData();
+        Combat.MaxHp = Math.Clamp(Combat.MaxHp, 1, 9999);
+        Combat.StaggerMax = Math.Clamp(Combat.StaggerMax, 1, 9999);
+        Combat.SlashResist = Clamp(Combat.SlashResist, 0, 4, 1);
+        Combat.PierceResist = Clamp(Combat.PierceResist, 0, 4, 1);
+        Combat.BluntResist = Clamp(Combat.BluntResist, 0, 4, 1);
         Moves ??= new List<MoveData>();
         Moves.RemoveAll(m => m is null);
         Look ??= new LookData();
@@ -198,6 +261,22 @@ public sealed class FighterData
             move.Hitbox.Width = Clamp(move.Hitbox.Width, 4, 800, 96);
             move.Hitbox.Height = Clamp(move.Hitbox.Height, 4, 800, 30);
             move.ArmHurtboxWidth = Clamp(move.ArmHurtboxWidth, 0, 800, 80);
+            move.Damage = Math.Clamp(move.Damage, 0, 999);
+            move.StaggerDamage = Math.Clamp(move.StaggerDamage, 0, 999);
+            move.ClashPower = Clamp(move.ClashPower, 0, 999, 10);
+            move.DamageType = Enum.IsDefined(move.DamageType) ? move.DamageType : DamageType.Blunt;
+            move.Sin = Enum.IsDefined(move.Sin) ? move.Sin : Sin.Wrath;
+            move.OnHit ??= new List<StatusData>();
+            move.SelfOnHit ??= new List<StatusData>();
+            foreach (StatusData st in move.OnHit.Concat(move.SelfOnHit))
+            {
+                st.Status = Enum.IsDefined(st.Status) ? st.Status : StatusKind.Burn;
+                st.Potency = Math.Clamp(st.Potency, 0, CombatRules.StatusCap);
+                st.Count = Math.Clamp(st.Count, 0, CombatRules.StatusCap);
+            }
+
+            move.OnHit.RemoveAll(st => st is null || st.Potency == 0 || st.Count == 0);
+            move.SelfOnHit.RemoveAll(st => st is null || st.Potency == 0 || st.Count == 0);
         }
 
         _ = Punch; // make sure the punch button has a move

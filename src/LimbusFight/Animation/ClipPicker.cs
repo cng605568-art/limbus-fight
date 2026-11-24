@@ -34,7 +34,7 @@ public static class ClipPicker
 
     public static ClipId Wanted(FighterState state) => state switch
     {
-        FighterState.Hitstun => ClipId.Hit,
+        FighterState.Hitstun or FighterState.Staggered or FighterState.ClashRecoil or FighterState.Down => ClipId.Hit,
         FighterState.Attack => ClipId.Punch,
         FighterState.JumpSquat or FighterState.Airborne => ClipId.Jump,
         FighterState.WalkForward or FighterState.WalkBackward => ClipId.Walk,
