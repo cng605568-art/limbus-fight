@@ -175,7 +175,7 @@ public static class MatchHud
             : f.CanUseEgo ? "E.G.O READY (I)"
             : f.IsPanicking ? "E.G.O: Panic"
             : "E.G.O " + string.Join(" ", egoMove.SinCost.Select(c => $"{Math.Min(f.Sins[(int)c.Sin], c.Amount)}/{c.Amount} {c.Sin}"));
-        string kit = $"{stats.Defense.Kind}" + (stats.Passive.Kind == PassiveKind.None ? string.Empty : $"  ·  {stats.Passive.Describe()}");
+        string kit = $"{stats.Defense.Kind}" + (stats.Passive.Kind == PassiveKind.None ? string.Empty : $"  |  {stats.Passive.Describe()}");
         int kitY = Top + 82;
         Color egoColor = f.CanUseEgo ? Theme.Accent : Theme.TextDim;
         if (mirrored)
@@ -217,8 +217,9 @@ public static class MatchHud
     private static void DrawCentre(TestArena arena, int width)
     {
         int seconds = (arena.RoundTimer + 59) / 60;
-        Color timeColor = seconds <= 10 ? Theme.Bad : Theme.Text;
-        Ui.TextCentered(seconds.ToString(), width / 2, Top + 14, 44, timeColor);
+        bool timed = arena.RoundLengthFrames > 0;
+        Color timeColor = timed && seconds <= 10 ? Theme.Bad : Theme.Text;
+        Ui.TextCentered(timed ? seconds.ToString() : "--", width / 2, Top + 14, 44, timeColor);
         Ui.TextCentered($"ROUND {arena.RoundNumber}", width / 2, Top + 62, 18, Theme.TextDim);
         if (arena.RoundsToWin > 0)
         {

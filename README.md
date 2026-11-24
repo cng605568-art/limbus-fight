@@ -14,7 +14,22 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 7 (testing):** a real game around the fighting.
+**Step 8 (testing):** playing alone.
+
+- **CPU opponent** in three levels (Easy, Normal, Hard): walks to the range its skills reach,
+  attacks, punishes whiffs and Staggers, defends on reaction (Hard reacts fast and often, Easy
+  rarely) and uses E.G.O when it has the Sins. Hard beats Easy 32 of 32 times in the tests.
+- **Arcade:** pick a fighter, then beat a shuffled row of the other Sinners (up to 5, Bosses at
+  the end); the last two fights are one CPU level harder. Losing offers *Continue*; clearing it
+  shows the Arcade Clear card with continues used.
+- **Versus CPU:** one match, you pick both fighters.
+- **Training options** (Esc in Training): dummy mode (stand, fight back, defend, CPU), CPU level,
+  infinite health (refills after a second, no K.O.), free E.G.O, hitboxes. No round timer.
+- **Options:** CPU level, rounds (1, best of 3, best of 5), round time (30 / 60 / 99 / no timer),
+  fullscreen, window size. Saved in `%LOCALAPPDATA%\LimbusFight\settings.json`.
+  **F11** or **Alt+Enter** switches fullscreen anywhere.
+
+**Step 7 (done):** a real game around the fighting.
 
 - **Title screen, main menu, character select, pause menu (Esc) and a results card.**
 - **Versus:** two players on one keyboard, best of 3 (round pips under the timer).
@@ -151,6 +166,7 @@ LimbusFight/
     │   ├── SteamCheckResult.cs      status object, StateFlags decoding
     │   ├── ValveKeyValues.cs        VDF / ACF parser
     │   ├── FixedStepClock.cs        exact 60 Hz simulation ticks
+    │   ├── GameSettings.cs          options (settings.json)
     │   ├── AppInfo.cs               version string
     │   └── Diagnostics.cs           crash log + --selftest
     ├── Assets/                      read-only access to the player's Limbus Company files
@@ -168,6 +184,7 @@ LimbusFight/
     │   ├── FighterData.cs           fighter file format: body, movement, moves, look
     │   ├── FighterStore.cs          load / save fighter files + roster.json, first-run defaults
     │   ├── Presets.cs               the built-in Sinners (written to the fighters folder)
+    │   ├── ArcadeLadder.cs          Arcade: the row of CPU opponents
     │   ├── AutoRoster.cs            finds each Sinner's sprites in the player's files, builds looks
     │   └── RosterManager.cs         which fighter is in each slot; switch, copy, rename, edit
     ├── Animation/                   looks: data files and clip choice (no Raylib types)
@@ -177,6 +194,7 @@ LimbusFight/
     ├── Gameplay/                    pure simulation (no Raylib types)
     │   ├── Box.cs  FrameInput.cs  AttackData.cs  FighterStats.cs  Fighter.cs
     │   ├── Combat.cs                Sins, damage types, statuses, combat constants
+    │   ├── CpuController.cs         the computer opponent (Easy / Normal / Hard)
     │   └── TestArena.cs             rounds, hits, clashes, statuses, the fighting dummy
     ├── Input/KeyboardSampler.cs     keyboard -> per-tick input
     ├── Rendering/                   stage, fighters, debug boxes, window scaling, look textures
@@ -204,6 +222,7 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | E.G.O | I | Numpad Enter (or `'`) |
 
 Menus: W / S or the arrows move, J or Enter chooses, K or Esc goes back. Esc pauses a match.
+F11 or Alt+Enter: fullscreen.
 
 Training only:
 
@@ -214,9 +233,9 @@ Training only:
 | F2 | fighter editor (Tab P1 / Dummy, `[` `]` switch fighter, Ctrl+N new fighter, Enter on the name rename, Up/Down pick, Left/Right change, Shift bigger steps, Del reset value, Space play / pause, `,` `.` step frames) |
 | F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+6 / 7 to the swing / hit effect, Ctrl+A auto look from the open file, Ctrl+Z undo it, add Shift for the Dummy, Ctrl+O open exports, Ctrl+R report) |
 | F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
-| F6 | dummy: stand still / fight back / defend |
+| F6 | dummy: stand still / fight back / defend / CPU |
 | F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |
-| Esc | pause (Resume, Restart, Character select, Controls, Main menu, Quit) |
+| Esc | training options and pause (dummy, CPU level, infinite health, free E.G.O, hitboxes, restart, ...) |
 
 ## Version gate
 

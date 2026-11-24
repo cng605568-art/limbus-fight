@@ -123,7 +123,27 @@ public static class Ui
         var sb = new StringBuilder(text.Length);
         foreach (char c in text)
         {
-            sb.Append(c > 126 || (c < 32 && c != '\n') ? '?' : c);
+            switch (c)
+            {
+                case '\u00B7' or '\u2013' or '\u2014' or '\u2022':
+                    sb.Append('-');
+                    break;
+                case '\u2018' or '\u2019':
+                    sb.Append('\'');
+                    break;
+                case '\u201C' or '\u201D':
+                    sb.Append('"');
+                    break;
+                case '\u2026':
+                    sb.Append("...");
+                    break;
+                case '\u00E9' or '\u00E8' or '\u00EA':
+                    sb.Append('e');
+                    break;
+                default:
+                    sb.Append(c > 126 || (c < 32 && c != '\n') ? '?' : c);
+                    break;
+            }
         }
 
         return sb.ToString();

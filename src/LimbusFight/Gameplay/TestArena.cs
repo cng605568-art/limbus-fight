@@ -11,6 +11,9 @@ public enum DummyMode
 
     /// <summary>Holds its defense (guards, or evades / counters when P1 attacks).</summary>
     Defend,
+
+    /// <summary>Fights like a real opponent: the CPU (<see cref="TestArena.Cpu"/>).</summary>
+    Cpu,
 }
 
 public enum RoundPhase
@@ -76,6 +79,21 @@ public sealed class TestArena
 
     public DummyMode DummyMode { get; set; } = DummyMode.Stand;
 
+    /// <summary>The computer opponent used when <see cref="DummyMode"/> is <see cref="DummyMode.Cpu"/>.</summary>
+    public CpuController Cpu { get; } = new();
+
+    /// <summary>Seed for the CPU's random choices, applied by <see cref="NewMatch"/>.</summary>
+    public uint Seed { get; set; } = 1;
+
+    /// <summary>Round length in frames; 0 = no timer.</summary>
+    public int RoundLengthFrames { get; set; } = CombatRules.RoundFrames;
+
+    /// <summary>Training: health and Stagger refill after a short rest, and nobody is knocked out.</summary>
+    public bool InfiniteHealth { get; set; }
+
+    /// <summary>Training: both fighters always have the Sins their E.G.O needs.</summary>
+    public bool FreeEgo { get; set; }
+
     // ---- Rounds ----------------------------------------------------------------------------
     public RoundPhase Phase { get; private set; } = RoundPhase.Fight;
 
@@ -109,6 +127,7 @@ public sealed class TestArena
         Player1Wins = 0;
         DummyWins = 0;
         MatchWinner = 0;
+        Cpu.Reset(Seed);
         StartRound(1);
     }
 
@@ -166,7 +185,27 @@ public sealed class TestArena
             ResolveHits();
         }
 
+        TrainingRefill(Player1);
+        TrainingRefill(Dummy);
         CheckRoundEnd();
+    }
+
+    /// <summary>Training helpers: refill health / Stagger once a fighter has rested a second; keep E.G.O paid for.</summary>
+    private void TrainingRefill(Fighter f)
+    {
+        if (InfiniteHealth && f.IsActionable && Frame - LastHitFrame > 60 && (f.Hp < f.Stats.MaxHp || f.Stagger < f.Stats.StaggerMax))
+        {
+            f.Hp = f.Stats.MaxHp;
+            f.Stagger = f.Stats.StaggerMax;
+        }
+
+        if (FreeEgo && f.Stats.Ego is { } ego)
+        {
+            foreach (SinCost cost in ego.SinCost)
+            {
+                f.Sins[(int)cost.Sin] = Math.Max(f.Sins[(int)cost.Sin], cost.Amount);
+            }
+        }
     }
 
     /// <summary>Gives Player 1 or the dummy another fighter's stats (from its data file). Positions are kept.</summary>
@@ -190,7 +229,7 @@ public sealed class TestArena
         RoundNumber = number;
         Phase = RoundPhase.Fight;
         PhaseFrames = 0;
-        RoundTimer = CombatRules.RoundFrames;
+        RoundTimer = RoundLengthFrames;
         RoundResult = null;
         Player1.ResetTo(Player1StartX, facing: 1);
         Dummy.ResetTo(DummyStartX, facing: -1);
@@ -206,6 +245,12 @@ public sealed class TestArena
         if (Phase != RoundPhase.Fight)
         {
             return;
+        }
+
+        if (InfiniteHealth)
+        {
+            Player1.Hp = Math.Max(1, Player1.Hp);
+            Dummy.Hp = Math.Max(1, Dummy.Hp);
         }
 
         bool p1Down = Player1.Hp <= 0;
@@ -227,7 +272,7 @@ public sealed class TestArena
             return;
         }
 
-        if (--RoundTimer <= 0)
+        if (RoundLengthFrames > 0 && --RoundTimer <= 0)
         {
             float p1 = (float)Player1.Hp / Math.Max(1, Player1.Stats.MaxHp);
             float dummy = (float)Dummy.Hp / Math.Max(1, Dummy.Stats.MaxHp);
@@ -274,6 +319,11 @@ public sealed class TestArena
         if (DummyMode == DummyMode.Stand || Phase != RoundPhase.Fight)
         {
             return FrameInput.None;
+        }
+
+        if (DummyMode == DummyMode.Cpu)
+        {
+            return Cpu.Think(this, Dummy, Player1);
         }
 
         if (DummyMode == DummyMode.Defend)

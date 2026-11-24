@@ -277,6 +277,9 @@ public sealed class FighterData
     /// <summary>Built-in fighters have a preset version; custom copies have 0.</summary>
     public int Preset { get; set; }
 
+    /// <summary>A Boss: fought at the end of Arcade and in Boss Rush (Step 9 adds its rules).</summary>
+    public bool IsBoss { get; set; }
+
     public BodyData Body { get; set; } = new();
 
     public MovementData Movement { get; set; } = new();

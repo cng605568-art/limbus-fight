@@ -619,115 +619,50 @@ public sealed class SelectScreen
     }
 }
 
-/// <summary>Pause menu over a match.</summary>
+/// <summary>Pause menu over a match. The game fills in the items (they differ per mode).</summary>
 public sealed class PauseMenu
 {
-    public enum Choice
-    {
-        None,
-        Resume,
-        Restart,
-        Select,
-        Menu,
-        Controls,
-        Quit,
-    }
+    public MenuList List { get; } = new();
 
-    private readonly MenuList _list = new();
-
-    public void Open(bool training)
+    /// <summary>The chosen item's label, "Resume" for Esc / back, or null.</summary>
+    public string? Update(KeyboardSampler k)
     {
-        _list.Set(new[]
+        if (MenuKeys.Back(k))
         {
-            new MenuList.Item("Resume"),
-            new MenuList.Item(training ? "Restart round" : "Restart match"),
-            new MenuList.Item("Character select"),
-            new MenuList.Item("Controls"),
-            new MenuList.Item("Main menu"),
-            new MenuList.Item("Quit game"),
-        });
-        _list.Index = 0;
-    }
-
-    public Choice Update(KeyboardSampler k)
-    {
-        if (k.WasPressed(KeyboardKey.Escape) || MenuKeys.Back(k))
-        {
-            return Choice.Resume;
+            return "Resume";
         }
 
-        if (!_list.Update(k))
-        {
-            return Choice.None;
-        }
-
-        return _list.Index switch
-        {
-            0 => Choice.Resume,
-            1 => Choice.Restart,
-            2 => Choice.Select,
-            3 => Choice.Controls,
-            4 => Choice.Menu,
-            _ => Choice.Quit,
-        };
+        return List.Update(k) ? List.Selected.Label : null;
     }
 
-    public void Draw(int width, int height)
+    /// <summary>-1 / +1 when Left / Right is pressed on an item with a value (an option), else 0.</summary>
+    public int Adjust(KeyboardSampler k) => List.Items.Count > 0 && List.Selected.Value is not null
+        ? (MenuKeys.Left(k) ? -1 : MenuKeys.Right(k) ? 1 : 0)
+        : 0;
+
+    public void Draw(int width, int height, string title = "PAUSED")
     {
         MenuArt.Veil(width, height);
-        MenuArt.Heading("PAUSED", width, 170);
-        _list.Draw(width / 2, 270, 420);
+        int rows = List.Items.Count;
+        int top = Math.Max(150, 330 - (rows * 21));
+        MenuArt.Heading(title, width, top - 90);
+        List.Draw(width / 2, top, 520, rows > 7 ? 40 : 46, rows > 7 ? 24 : 28);
     }
 }
 
-/// <summary>"WINNER" card after a match, with rematch / select / menu.</summary>
+/// <summary>Card after a match: a headline and a short list of what to do next.</summary>
 public sealed class ResultsScreen
 {
-    public enum Choice
-    {
-        None,
-        Next,
-        Rematch,
-        Select,
-        Menu,
-    }
-
     private readonly MenuList _list = new();
-    private bool _hasNext;
 
-    /// <summary>Opens the card. <paramref name="nextLabel"/> adds a first item ("Next fight") for arcade.</summary>
-    public void Open(string? nextLabel = null)
+    public void Open(params string[] choices)
     {
-        _hasNext = nextLabel is not null;
-        var items = new List<MenuList.Item>();
-        if (nextLabel is not null)
-        {
-            items.Add(new MenuList.Item(nextLabel));
-        }
-
-        items.Add(new MenuList.Item("Rematch"));
-        items.Add(new MenuList.Item("Character select"));
-        items.Add(new MenuList.Item("Main menu"));
-        _list.Set(items);
+        _list.Set(choices.Select(c => new MenuList.Item(c)));
         _list.Index = 0;
     }
 
-    public Choice Update(KeyboardSampler k)
-    {
-        if (!_list.Update(k))
-        {
-            return Choice.None;
-        }
-
-        int i = _list.Index - (_hasNext ? 1 : 0);
-        return i switch
-        {
-            -1 => Choice.Next,
-            0 => Choice.Rematch,
-            1 => Choice.Select,
-            _ => Choice.Menu,
-        };
-    }
+    /// <summary>The chosen label, or null.</summary>
+    public string? Update(KeyboardSampler k) => _list.Update(k) ? _list.Selected.Label : null;
 
     public void Draw(TestArena arena, int width, int height, string headline, string? subline = null)
     {
@@ -741,5 +676,43 @@ public sealed class ResultsScreen
         }
 
         _list.Draw(width / 2, 350, 420);
+    }
+}
+
+/// <summary>"STAGE 2 / 5   YI SANG  VS  FAUST" before an arcade fight (and a versus match).</summary>
+public static class VersusIntro
+{
+    public const int Frames = 110;
+
+    public static void Draw(int width, int height, int frame, FighterData left, FighterData right, string? stage, string? rightTag)
+    {
+        MenuArt.Background(width, height, Raylib.GetTime());
+        float t = Math.Clamp(frame / 20f, 0f, 1f);
+        int slide = (int)((1f - t) * 500);
+
+        Color ColorOf(FighterData d, Color fallback)
+        {
+            uint rgb = FighterData.ParseRgb(d.Color);
+            return rgb == 0 ? fallback : new Color((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb, (byte)255);
+        }
+
+        Raylib.DrawRectangle(-slide, 230, width / 2, 170, Raylib.Fade(ColorOf(left, MenuArt.P1Color), 0.35f));
+        Raylib.DrawRectangle((width / 2) + slide, 330, width / 2, 170, Raylib.Fade(ColorOf(right, MenuArt.P2Color), 0.35f));
+        Ui.Text(left.Name.ToUpperInvariant(), 70 - slide, 270, 64, Theme.Text);
+        Ui.Text(left.Identity ?? string.Empty, 74 - slide, 340, 22, Theme.TextDim);
+        Ui.TextRight(right.Name.ToUpperInvariant(), width - 70 + slide, 370, 64, Theme.Text);
+        Ui.TextRight(rightTag ?? right.Identity ?? string.Empty, width - 74 + slide, 440, 22, Theme.TextDim);
+        if (frame > 14)
+        {
+            Ui.TextCentered("VS", (width / 2) + 4, 324, 110, new Color((byte)60, (byte)8, (byte)12, (byte)255));
+            Ui.TextCentered("VS", width / 2, 320, 110, Theme.Accent);
+        }
+
+        if (stage is not null)
+        {
+            Ui.TextCentered(stage, width / 2, 120, 36, Theme.Accent);
+        }
+
+        Ui.TextCentered("J / Enter to skip", width / 2, height - 40, 18, Theme.TextDim);
     }
 }
