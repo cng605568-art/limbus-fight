@@ -12,26 +12,32 @@ namespace LimbusFight.UI;
 public static class MenuKeys
 {
     public static bool Up(KeyboardSampler k, int player = 0) =>
-        (player != 2 && k.WasPressed(KeyboardKey.W)) || (player != 1 && k.WasPressed(KeyboardKey.Up));
+        (player != 2 && k.WasPressed(KeyboardKey.W)) || (player != 1 && k.WasPressed(KeyboardKey.Up)) || k.PadPressed(GamepadButton.LeftFaceUp, player);
 
     public static bool Down(KeyboardSampler k, int player = 0) =>
-        (player != 2 && k.WasPressed(KeyboardKey.S)) || (player != 1 && k.WasPressed(KeyboardKey.Down));
+        (player != 2 && k.WasPressed(KeyboardKey.S)) || (player != 1 && k.WasPressed(KeyboardKey.Down)) || k.PadPressed(GamepadButton.LeftFaceDown, player);
 
     public static bool Left(KeyboardSampler k, int player = 0) =>
-        (player != 2 && k.WasPressed(KeyboardKey.A)) || (player != 1 && k.WasPressed(KeyboardKey.Left));
+        (player != 2 && k.WasPressed(KeyboardKey.A)) || (player != 1 && k.WasPressed(KeyboardKey.Left)) || k.PadPressed(GamepadButton.LeftFaceLeft, player);
 
     public static bool Right(KeyboardSampler k, int player = 0) =>
-        (player != 2 && k.WasPressed(KeyboardKey.D)) || (player != 1 && k.WasPressed(KeyboardKey.Right));
+        (player != 2 && k.WasPressed(KeyboardKey.D)) || (player != 1 && k.WasPressed(KeyboardKey.Right)) || k.PadPressed(GamepadButton.LeftFaceRight, player);
 
     public static bool Confirm(KeyboardSampler k, int player = 0) =>
         (player != 2 && (k.WasPressed(KeyboardKey.J) || k.WasPressed(KeyboardKey.Enter) || k.WasPressed(KeyboardKey.Space)))
-        || (player != 1 && (k.WasPressed(KeyboardKey.Kp1) || k.WasPressed(KeyboardKey.Comma) || k.WasPressed(KeyboardKey.KpEnter)));
+        || (player != 1 && (k.WasPressed(KeyboardKey.Kp1) || k.WasPressed(KeyboardKey.Comma) || k.WasPressed(KeyboardKey.KpEnter)))
+        || k.PadPressed(GamepadButton.RightFaceDown, player) || k.PadPressed(GamepadButton.MiddleRight, player);
 
     public static bool Back(KeyboardSampler k, int player = 0) =>
         (player != 2 && (k.WasPressed(KeyboardKey.K) || k.WasPressed(KeyboardKey.Backspace)))
         || (player != 1 && (k.WasPressed(KeyboardKey.Kp2) || k.WasPressed(KeyboardKey.Period)))
         || (player == 0 && k.WasPressed(KeyboardKey.Escape))
-        || (player == 1 && k.WasPressed(KeyboardKey.Escape));
+        || (player == 1 && k.WasPressed(KeyboardKey.Escape))
+        || k.PadPressed(GamepadButton.RightFaceRight, player);
+
+    /// <summary>Esc, P, or Start on any controller.</summary>
+    public static bool Pause(KeyboardSampler k) =>
+        k.WasPressed(KeyboardKey.Escape) || k.WasPressed(KeyboardKey.P) || k.PadPressed(GamepadButton.MiddleRight);
 }
 
 /// <summary>A vertical list of choices with a highlighted row.</summary>
@@ -213,11 +219,14 @@ public static class ControlsScreen
         {
             int rowY = y + 50 + (i * 40);
             Ui.Text(rows[i].What, left, rowY, 20, Theme.TextDim);
-            Ui.Text(rows[i].P1, left + 330, rowY, 22, Theme.Text);
+            Ui.Text(rows[i].P1, left + 390, rowY, 22, Theme.Text);
             Ui.Text(rows[i].P2, right + 120, rowY, 22, Theme.Text);
         }
 
-        int notesY = y + 50 + (rows.Length * 40) + 24;
+        int padY = y + 50 + (rows.Length * 40) + 8;
+        Ui.TextCentered("Controller: d-pad / left stick move, A Skill 1, X Skill 2, Y Skill 3, B or LB defend, RB / RT E.G.O, Start pause",
+            width / 2, padY, 20, Theme.Text);
+        int notesY = padY + 40;
         Ui.TextCentered("Esc: pause   |   Menus: W/S or arrows to move, J / Enter to choose, K / Esc to go back", width / 2, notesY, 20, Theme.TextDim);
         Ui.TextCentered("Training only: R restart, F1 boxes, F2 fighter editor, F3 asset browser, F4 look editor, F6 dummy", width / 2, notesY + 28, 20, Theme.TextDim);
         Ui.TextCentered("Clash: attack into an attack. Hits fill Sanity and Sins; full Sins pay for E.G.O.", width / 2, notesY + 56, 20, Theme.TextDim);

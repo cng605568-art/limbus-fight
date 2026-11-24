@@ -8,13 +8,34 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 
 > Unofficial fan project. Not affiliated with or endorsed by Project Moon.
 
+## Play
+
+1. Download **LimbusFight.exe** (link below). It is one file; no install.
+2. Run it. Windows may warn about an unknown app: *More info* -> *Run anyway*.
+3. Press Enter on the title screen. **Arcade** is the quickest way in; **Versus** needs two players.
+4. Have Limbus Company installed through Steam (and closed) so the fighters get their looks from
+   your own game files. Without it everything still works, with plain coloured fighters.
+
+Keyboard or controller (Xbox / PlayStation, through Windows). F11 switches fullscreen. Options,
+CPU level and round settings are in the main menu.
+
 ## Status
+
+**Step 11 (testing):** release polish.
+
+- **Controllers:** d-pad or left stick to move, A / X / Y skills 1-3, B or LB defend, RB / RT
+  E.G.O, Start pause; menus work with the pad too. In Versus, controller 1 plays Player 1 and
+  controller 2 Player 2 (swappable in Options); in one-player modes any controller plays.
+- **Options:** fullscreen and window size join CPU level, rounds and round time.
+- **Exe and window icon** (an original "LF" mark, not Project Moon art).
+- The version check still only *reports* the Limbus build (`BYPASS_VERSION_CHECK = true`): the
+  supported `TARGET_BUILD_ID` has to be read from a real install before it can block anything.
 
 **Step 1 (done):** project foundation, GitHub Actions exe builds, Steam detection
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 10 (testing):** the full roster.
+**Step 10 (built):** the full roster.
 
 - **All 12 Sinners** (base LCB Identities): Yi Sang, Faust, Don Quixote, Ryoshu, Meursault, Hong Lu,
   Heathcliff, Ishmael, Rodion, Sinclair, Outis and Gregor, each with three skills, their base ZAYIN
@@ -26,7 +47,7 @@ two test fighters, F1 hitbox / FPS overlay and the red update screen.
 - Balance is checked with CPU-vs-CPU tests: in a 15-fighter round robin no fighter wins more
   than 85% or less than 15% of its matches.
 
-**Step 9 (done):** Bosses.
+**Step 9 (built):** Bosses.
 
 - **Boss rules** (a `boss` block in the fighter file, editable in F2 under BOSS): **super armor**
   (hits during its wind-up and active frames hurt but do not interrupt; breaking its Stagger bar
@@ -37,7 +58,7 @@ two test fighters, F1 hitbox / FPS overlay and the red update screen.
 - **Boss Rush:** every Boss in a row, one round each. Arcade now ends with the Bosses.
 - Built-in Sinners have more health (about 170-200), so rounds last longer.
 
-**Step 8 (done):** playing alone.
+**Step 8 (built):** playing alone.
 
 - **CPU opponent** in three levels (Easy, Normal, Hard): walks to the range its skills reach,
   attacks, punishes whiffs and Staggers, defends on reaction (Hard reacts fast and often, Easy
@@ -52,7 +73,7 @@ two test fighters, F1 hitbox / FPS overlay and the red update screen.
   fullscreen, window size. Saved in `%LOCALAPPDATA%\LimbusFight\settings.json`.
   **F11** or **Alt+Enter** switches fullscreen anywhere.
 
-**Step 7 (done):** a real game around the fighting.
+**Step 7 (built):** a real game around the fighting.
 
 - **Title screen, main menu, character select, pause menu (Esc) and a results card.**
 - **Versus:** two players on one keyboard, best of 3 (round pips under the timer).
@@ -244,8 +265,11 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | defend (guard, evade or counter) | S | Numpad 0 or Right Shift |
 | E.G.O | I | Numpad Enter (or `'`) |
 
-Menus: W / S or the arrows move, J or Enter chooses, K or Esc goes back. Esc pauses a match.
-F11 or Alt+Enter: fullscreen.
+| move / jump (controller) | d-pad or left stick | (controller 2) |
+| skills 1 / 2 / 3, defend, E.G.O (controller) | A / X / Y, B or LB, RB or RT | (controller 2) |
+
+Menus: W / S or the arrows move, J or Enter chooses, K or Esc goes back. Esc (or Start) pauses a
+match. F11 or Alt+Enter: fullscreen.
 
 Training only:
 

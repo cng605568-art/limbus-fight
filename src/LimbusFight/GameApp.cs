@@ -115,6 +115,7 @@ public sealed class GameApp
         _editor = new LookEditorScreen(_looks, _roster.Stats);
         _browser.SelectedClip = () => (_editor.SelectedSlot, _editor.SelectedClip);
         _boxEditor = new BoxEditorScreen(_roster, _looks);
+        _keyboard.Pad1Player = _settings.Pad1Player;
         _autoRoster = new AutoRoster(_roster);
         _select = new SelectScreen(_roster, _looks) { Status = () => _autoRoster.Status };
 
@@ -364,6 +365,8 @@ public sealed class GameApp
             new MenuList.Item("Round time", "Length of a round (Training never has a timer).", Value: time),
             new MenuList.Item("Fullscreen", "F11 or Alt+Enter also switches.", Value: _settings.Fullscreen ? "on" : "off"),
             new MenuList.Item("Window size", "Window size when not fullscreen.", Value: $"{_settings.WindowScale * 100:0}%"),
+            new MenuList.Item("Controller 1 plays as", $"In Versus; controller 2 plays the other side. Controllers found: {_keyboard.PadCount}.",
+                Value: _settings.Pad1Player == 1 ? "Player 1" : "Player 2"),
             new MenuList.Item("Back"),
         });
     }
@@ -404,6 +407,10 @@ public sealed class GameApp
             case "Fullscreen":
                 _settings.Fullscreen = !_settings.Fullscreen;
                 ApplyDisplay();
+                break;
+            case "Controller 1 plays as":
+                _settings.Pad1Player = 3 - _settings.Pad1Player;
+                _keyboard.Pad1Player = _settings.Pad1Player;
                 break;
             case "Window size":
                 int w = Array.IndexOf(WindowScales, _settings.WindowScale);
@@ -465,6 +472,7 @@ public sealed class GameApp
     private void OpenSelect(GameMode mode)
     {
         _mode = mode;
+        _keyboard.SinglePlayer = mode != GameMode.Versus;
         _select.OwnFighterOnly = mode is GameMode.Arcade or GameMode.BossRush;
         switch (mode)
         {
@@ -539,6 +547,7 @@ public sealed class GameApp
 
     private void StartMatch(bool intro)
     {
+        _keyboard.SinglePlayer = _mode != GameMode.Versus;
         _arena.Player1.Name = "P1";
         _arena.Seed = NextSeed();
         switch (_mode)
@@ -636,7 +645,7 @@ public sealed class GameApp
             return;
         }
 
-        if (_keyboard.WasPressed(KeyboardKey.Escape) || _keyboard.WasPressed(KeyboardKey.P))
+        if (MenuKeys.Pause(_keyboard))
         {
             BuildPause();
             _pause.List.Index = 0;

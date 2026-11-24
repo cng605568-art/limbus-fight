@@ -41,6 +41,9 @@ public sealed class GameSettings
     /// <summary>Window size as a multiple of 1280x720 (0.5 - 2) when not fullscreen.</summary>
     public float WindowScale { get; set; } = 1f;
 
+    /// <summary>Which player the first controller plays as in Versus (1 or 2).</summary>
+    public int Pad1Player { get; set; } = 1;
+
     [JsonIgnore]
     public int RoundFrames => RoundSeconds * 60;
 
@@ -50,6 +53,7 @@ public sealed class GameSettings
         RoundsToWin = Math.Clamp(RoundsToWin, 1, 3);
         RoundSeconds = RoundSecondChoices.Contains(RoundSeconds) ? RoundSeconds : 60;
         WindowScale = float.IsFinite(WindowScale) ? Math.Clamp(WindowScale, 0.5f, 2f) : 1f;
+        Pad1Player = Pad1Player == 2 ? 2 : 1;
     }
 
     public static GameSettings Load()

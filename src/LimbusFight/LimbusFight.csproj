@@ -12,7 +12,8 @@
     <RootNamespace>LimbusFight</RootNamespace>
     <AssemblyName>LimbusFight</AssemblyName>
     <Product>Limbus Fight</Product>
-    <Description>Limbus Company 2D fighting fangame (Step 1: foundation build)</Description>
+    <Description>Limbus Company 2D fighting fangame (unofficial, uses the player's own game files)</Description>
+    <ApplicationIcon>Resources\LimbusFight.ico</ApplicationIcon>
 
     <!-- CI overrides Version with 0.1.<run number> and appends the commit SHA. -->
     <Version>0.1.0</Version>
@@ -48,6 +49,11 @@
     <!-- Step 2: read Unity bundles (MIT) and decode their textures (MIT). Both are pure managed code. -->
     <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
     <PackageReference Include="AssetRipper.TextureDecoder" Version="2.6.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Original icon (not Project Moon art): exe icon + window icon. -->
+    <EmbeddedResource Include="Resources\icon.png" LogicalName="icon.png" />
   </ItemGroup>
 
 </Project>

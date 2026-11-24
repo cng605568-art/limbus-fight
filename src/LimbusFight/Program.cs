@@ -65,11 +65,39 @@ internal static class Program
             throw new InvalidOperationException("Raylib could not create a window (is an OpenGL 3.3 capable GPU driver installed?).");
         }
 
+        SetWindowIcon();
         Raylib.SetWindowMinSize(VirtualWidth / 2, VirtualHeight / 2);
         Raylib.SetTargetFPS(TargetFps);
         Raylib.SetExitKey(KeyboardKey.Null); // Esc pauses / goes back; the window close button quits
 
         new GameApp(steam).Run();
         Raylib.CloseWindow();
+    }
+
+    /// <summary>The window / taskbar icon, from the PNG embedded in the exe. A missing icon is not an error.</summary>
+    private static void SetWindowIcon()
+    {
+        try
+        {
+            using Stream? stream = typeof(Program).Assembly.GetManifestResourceStream("icon.png");
+            if (stream is null)
+            {
+                return;
+            }
+
+            using var memory = new MemoryStream();
+            stream.CopyTo(memory);
+            Image icon = Raylib.LoadImageFromMemory(".png", memory.ToArray());
+            if (icon.Width > 0)
+            {
+                Raylib.SetWindowIcon(icon);
+            }
+
+            Raylib.UnloadImage(icon);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Console.WriteLine("[LimbusFight] window icon not set: " + ex.Message);
+        }
     }
 }
