@@ -20,6 +20,13 @@ two test fighters, F1 hitbox / FPS overlay and the red update screen.
   punch and hit. In the F3 browser, pick a sprite and press **Ctrl+1..5** to add it to a P1 clip
   (hold **Shift** for the Dummy). The fighter is then drawn with those pictures instead of a box;
   hitboxes (F1) stay exactly where they were.
+- **Auto look (Ctrl+A in F3):** builds all five clips from the open file in one key press.
+  Sprite names are split into words and matched against keyword lists (idle / default / stand,
+  walk / move / run, jump / air, attack / skill / S1, damage / hit / hurt; evade fills in for jump);
+  numbered names (`attack_1`, `attack_2`...) become frames in order; effects and UI pictures
+  (fx, glow, portrait, icon...) are skipped. If names say nothing, shapes decide: the most upright
+  pose is idle and the widest poses are the punch. Each frame keeps a note saying why it was
+  picked (shown in F4); Ctrl+Z undoes the auto look. Hold Shift for the Dummy.
 - **Timing follows the moves:** punch frames are synced to the attack (1st = wind-up during
   startup, 2nd = the hit during active frames, the rest share recovery); jump frames follow the
   jump (crouch, rise, fall); idle, walk and hit play by each frame's hold time.
@@ -79,6 +86,7 @@ LimbusFight/
     │   └── AssetScanCli.cs          --scan-assets
     ├── Animation/                   looks: data files and clip choice (no Raylib types)
     │   ├── LookData.cs              look file format (clips of sprite references) + load/save
+    │   ├── AutoLook.cs              sorts a file's sprites into clips by name (or shape)
     │   └── ClipPicker.cs            fighter state -> clip + frame (punch synced to its frames)
     ├── Gameplay/                    pure simulation (no Raylib types)
     │   ├── Box.cs  FrameInput.cs  AttackData.cs  Fighter.cs  TestArena.cs
@@ -106,7 +114,7 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | J | punch |
 | R | reset positions |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
-| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+Shift+1..5 to the Dummy's, Ctrl+O open exports, Ctrl+R report) |
+| F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+A auto look from the open file, Ctrl+Z undo it, add Shift for the Dummy, Ctrl+O open exports, Ctrl+R report) |
 | F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
 | F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |
 | ESC | quit |

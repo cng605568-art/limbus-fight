@@ -31,7 +31,7 @@ public sealed class AssetBrowserScreen : IDisposable
     private const int PreviewX = 840;
     private const int PreviewW = 424;
     private const int PreviewTop = ListTop;
-    private const int PreviewH = 424;
+    private const int PreviewH = 400;
 
     private enum Pane
     {
@@ -465,6 +465,18 @@ public sealed class AssetBrowserScreen : IDisposable
         if (ctrl)
         {
             bool shift = Raylib.IsKeyDown(KeyboardKey.LeftShift) || Raylib.IsKeyDown(KeyboardKey.RightShift);
+            if (keys.WasPressed(KeyboardKey.A))
+            {
+                AutoLookFromFile(shift ? LookSlot.Dummy : LookSlot.Player1);
+            }
+
+            if (keys.WasPressed(KeyboardKey.Z))
+            {
+                LookSlot slot = shift ? LookSlot.Dummy : LookSlot.Player1;
+                bool undone = Looks?.UndoReplace(slot) ?? false;
+                SetStatus(undone ? $"{(slot == LookSlot.Player1 ? "P1" : "Dummy")} look restored to how it was before the auto look." : "Nothing to undo.", undone ? Theme.Good : Theme.Warn);
+            }
+
             KeyboardKey[] digits = { KeyboardKey.One, KeyboardKey.Two, KeyboardKey.Three, KeyboardKey.Four, KeyboardKey.Five };
             for (int i = 0; i < digits.Length; i++)
             {
@@ -679,6 +691,47 @@ public sealed class AssetBrowserScreen : IDisposable
         {
             SetStatus("Could not save PNG: " + ex.Message, Theme.Bad);
         }
+    }
+
+    /// <summary>
+    /// Ctrl+A: builds a whole look from the open file's sprites, sorting them into idle, walk, jump,
+    /// punch and hit by their names (or shapes). Size, flip and anchor settings are kept.
+    /// </summary>
+    private void AutoLookFromFile(LookSlot slot)
+    {
+        if (Looks is null || _contentsSource is null || _contents is null)
+        {
+            SetStatus("Open a sprite file first (e.g. a sactx... file), then press Ctrl+A.", Theme.Warn);
+            return;
+        }
+
+        if (_contents.Sprites.Count == 0)
+        {
+            SetStatus("This file has no sprites. Pick one whose middle list shows sprites.", Theme.Warn);
+            return;
+        }
+
+        ScannedFile source = _contentsSource;
+        var candidates = _contents.Sprites
+            .Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY))
+            .ToList();
+        AutoLookResult result = AutoLook.Build(candidates,
+            (pose, hold) => LookLoader.MakeFrame(source, LookFrame.KindSprite, pose.Name, null, hold));
+
+        if (result.Look.IsEmpty)
+        {
+            SetStatus("Could not find any poses in this file (only effects or UI pictures).", Theme.Warn);
+            return;
+        }
+
+        LookData old = Looks.Get(slot);
+        result.Look.Scale = 0f;
+        result.Look.ArtFacesLeft = old.ArtFacesLeft;
+        result.Look.AnchorAtPivot = old.AnchorAtPivot;
+        Looks.Replace(slot, result.Look);
+
+        string who = slot == LookSlot.Player1 ? "P1" : "Dummy";
+        SetStatus($"Auto look {who}: {result.Summary}.  F4 check, Ctrl+Z undo", result.UsedShapes ? Theme.Warn : Theme.Good);
     }
 
     /// <summary>Ctrl+1..5: appends the selected sprite (or sheet) to a clip of the P1 / Dummy look.</summary>
@@ -982,9 +1035,9 @@ public sealed class AssetBrowserScreen : IDisposable
 
         if (_image is not null)
         {
-            Ui.Text("Ctrl+S  save PNG (stays on this PC)", PreviewX + 10, infoY + 6, Font, Theme.TextDim);
-            Ui.Text(Ui.FitEnd("Ctrl+1-5  add to P1: idle walk jump punch hit", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + RowHeight, Font, Theme.Accent);
-            Ui.Text(Ui.FitEnd("+Shift = Dummy     F4  edit looks", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + (2 * RowHeight), Font, Theme.TextDim);
+            Ui.Text(Ui.FitEnd("Ctrl+A  auto look for P1 from this file", Font, PreviewW - 20), PreviewX + 10, infoY + 6, Font, Theme.Accent);
+            Ui.Text(Ui.FitEnd("Ctrl+1-5  add pose: idle walk jump punch hit", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + RowHeight, Font, Theme.Text);
+            Ui.Text(Ui.FitEnd("+Shift = Dummy  Ctrl+Z undo  Ctrl+S save PNG", Font, PreviewW - 20), PreviewX + 10, infoY + 6 + (2 * RowHeight), Font, Theme.TextDim);
         }
     }
 

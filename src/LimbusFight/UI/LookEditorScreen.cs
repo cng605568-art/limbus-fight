@@ -67,6 +67,11 @@ public sealed class LookEditorScreen
             _frameIndex = 0;
         }
 
+        if (ctrl && keys.WasPressed(KeyboardKey.Z))
+        {
+            SetStatus(_looks.UndoReplace(_slot) ? "Restored the look from before the auto look." : "Nothing to undo (Ctrl+Z undoes an auto look).", Theme.Text);
+        }
+
         if (ctrl)
         {
             HandleNudge(shift);
@@ -298,7 +303,8 @@ public sealed class LookEditorScreen
                 $"4. Press Ctrl+1 idle, Ctrl+2 walk, Ctrl+3 jump,",
                 "   Ctrl+4 punch or Ctrl+5 hit" + (_slot == LookSlot.Dummy ? ", with Shift held." : "."),
                 string.Empty,
-                "Add several poses to a clip to animate it.",
+                "Or press Ctrl+A in step 3 to fill every clip",
+                "automatically from that file.",
                 "Punch: 1st = wind-up, 2nd = hit, rest = recovery.",
             })
             {
@@ -423,6 +429,12 @@ public sealed class LookEditorScreen
             string where = frame.Sheet is not null ? "sheet " + frame.Sheet : (frame.Root == LookFrame.RootCache ? "bundle " : "file ") + frame.File;
             Ui.Text(Ui.FitMiddle(where, Font, PreviewW - 24), PreviewX + 12, infoY, Font, Theme.TextDim);
             infoY += 22;
+            if (frame.Note is string note)
+            {
+                Ui.Text(Ui.FitEnd(note, Font, PreviewW - 24), PreviewX + 12, infoY, Font, note.StartsWith("guessed", StringComparison.Ordinal) ? Theme.Warn : Theme.Good);
+                infoY += 22;
+            }
+
             if (_looks.PictureError(_slot, frame) is string error)
             {
                 Ui.Text(Ui.FitEnd(error, Font, PreviewW - 24), PreviewX + 12, infoY, Font, Theme.Bad);

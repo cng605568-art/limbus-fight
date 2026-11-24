@@ -50,11 +50,14 @@ public sealed class LookFrame
     /// <summary>How many 60 Hz frames this frame is shown (idle, walk and hit clips).</summary>
     public int Hold { get; set; } = 8;
 
+    /// <summary>Why this frame is here, e.g. "auto: name says 'attack'" (shown in the F4 editor).</summary>
+    public string? Note { get; set; }
+
     /// <summary>Identifies the picture regardless of timing; frames with the same key share one texture.</summary>
     [JsonIgnore]
     public string Key => $"{Root}|{File}|{Kind}|{Name}|{Sheet}";
 
-    public LookFrame Clone() => new() { Root = Root, File = File, Kind = Kind, Name = Name, Sheet = Sheet, Hold = Hold };
+    public LookFrame Clone() => new() { Root = Root, File = File, Kind = Kind, Name = Name, Sheet = Sheet, Hold = Hold, Note = Note };
 }
 
 /// <summary>
@@ -108,8 +111,10 @@ public sealed class LookData
         return frames;
     }
 
+    [JsonIgnore]
     public bool IsEmpty => Clips.Values.All(c => c.Count == 0);
 
+    [JsonIgnore]
     public IEnumerable<LookFrame> AllFrames => Clips.Values.SelectMany(c => c);
 
     /// <summary>Default hold for a new frame of <paramref name="clip"/>.</summary>

@@ -10,8 +10,11 @@ public sealed record TextureInfo(int FileIndex, long PathId, string Name, int Wi
     public string FormatName => TextureDecoding.FormatName(Format);
 }
 
-/// <summary>One Sprite found inside a bundle or serialized file. Width / Height are its full size (m_Rect).</summary>
-public sealed record SpriteInfo(int FileIndex, long PathId, string Name, int Width, int Height);
+/// <summary>
+/// One Sprite found inside a bundle or serialized file. Width / Height are its full size (m_Rect);
+/// PivotX / PivotY are Unity's pivot (0..1 from the bottom-left).
+/// </summary>
+public sealed record SpriteInfo(int FileIndex, long PathId, string Name, int Width, int Height, float PivotX = 0.5f, float PivotY = 0.5f);
 
 /// <summary>What one bundle / serialized file contains.</summary>
 public sealed record AssetFileContents(
@@ -124,12 +127,15 @@ public sealed class UnityAssetReader : IDisposable
                     {
                         AssetTypeValueField field = _manager.GetBaseField(inst, info);
                         AssetTypeValueField rect = field["m_Rect"];
+                        AssetTypeValueField pivot = field["m_Pivot"];
                         sprites.Add(new SpriteInfo(
                             fileIndex,
                             info.PathId,
                             field["m_Name"].AsString,
                             (int)MathF.Round(rect["width"].AsFloat),
-                            (int)MathF.Round(rect["height"].AsFloat)));
+                            (int)MathF.Round(rect["height"].AsFloat),
+                            pivot.IsDummy ? 0.5f : pivot["x"].AsFloat,
+                            pivot.IsDummy ? 0.5f : pivot["y"].AsFloat));
                     }
                     catch (Exception ex)
                     {

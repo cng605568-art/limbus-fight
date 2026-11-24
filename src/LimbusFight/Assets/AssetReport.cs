@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using LimbusFight.Animation;
 using LimbusFight.Core;
 
 namespace LimbusFight.Assets;
@@ -174,9 +175,41 @@ public static class AssetReport
                 sb.AppendLine($"      {s.Name,-40} {s.RectWidth,5:0}x{s.RectHeight,-5:0} {s.Packing,-22} v{s.VertexCount,-4} t{s.TriangleCount,-4} uv:{(s.HasUvs ? "yes" : "no "),-4} {s.Source}");
                 sb.AppendLine($"          mesh: {s.Channels}" + (s.Problem is null ? string.Empty : "   PROBLEM: " + s.Problem));
             }
+
+            AppendAutoLook(sb, reader, file);
         }
 
         reader.Close();
+    }
+
+    /// <summary>What Ctrl+A would build from this file, and how each name was read, to tune the auto-detector.</summary>
+    private static void AppendAutoLook(StringBuilder sb, UnityAssetReader reader, ScannedFile file)
+    {
+        try
+        {
+            AssetFileContents contents = reader.ReadContents(file);
+            var candidates = contents.Sprites.Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY)).ToList();
+            AutoLookResult result = AutoLook.Build(candidates, (pose, hold) => new LookFrame { File = "x", Name = pose.Name, Hold = hold });
+            sb.AppendLine($"      auto look: {result.Summary}");
+            foreach (AutoPick pick in result.Picks.Take(24))
+            {
+                sb.AppendLine($"          {LookData.ClipKey(pick.Clip),-6} {pick.Name,-44} {pick.Reason}");
+            }
+
+            var roles = candidates
+                .Select(c => AutoLook.SplitFrameNumber(c.Name).Base)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(b => (Base: b, Read: AutoLook.Classify(b)))
+                .Take(60)
+                .Select(x => $"{x.Base}={x.Read.Role}{(x.Read.Word.Length > 0 ? "(" + x.Read.Word + ")" : string.Empty)}");
+            sb.AppendLine("      names read as: " + string.Join(", ", roles));
+            int unique = candidates.Count(c => c.PivotY <= 0.2f);
+            sb.AppendLine($"      pivots at the feet: {unique} of {candidates.Count}");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            sb.AppendLine($"      auto look: failed ({ex.GetType().Name}: {ex.Message})");
+        }
     }
 
     private static void AppendDeepSample(StringBuilder sb, AssetScanResult scan, UnityAssetReader reader, IProgress<string>? progress, CancellationToken cancel)

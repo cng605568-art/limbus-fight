@@ -25,6 +25,7 @@ public sealed class LookManager : IDisposable
         public volatile int LoadDone;
         public volatile int LoadTotal;
         public string? Problem;
+        public LookData? Undo;
     }
 
     private readonly Dictionary<LookSlot, Slot> _slots = new()
@@ -79,6 +80,33 @@ public sealed class LookManager : IDisposable
         s.Data.Sanitise();
         s.Problem = LookStore.Save(slot, s.Data);
         s.ReloadWanted = true;
+    }
+
+    /// <summary>Replaces a slot's whole look (auto look), keeping the previous one for <see cref="UndoReplace"/>.</summary>
+    public void Replace(LookSlot slot, LookData look)
+    {
+        Slot s = _slots[slot];
+        s.Undo = LookStore.Deserialize(LookStore.Serialize(s.Data));
+        look.Sanitise();
+        s.Data = look;
+        s.Problem = LookStore.Save(slot, look);
+        s.ReloadWanted = true;
+    }
+
+    /// <summary>Brings back the look from before the last <see cref="Replace"/>. Returns false if there is none.</summary>
+    public bool UndoReplace(LookSlot slot)
+    {
+        Slot s = _slots[slot];
+        if (s.Undo is null)
+        {
+            return false;
+        }
+
+        s.Data = s.Undo;
+        s.Undo = null;
+        s.Problem = LookStore.Save(slot, s.Data);
+        s.ReloadWanted = true;
+        return true;
     }
 
     /// <summary>Re-reads Steam info and retries pictures that failed (F5).</summary>
