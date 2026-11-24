@@ -14,7 +14,23 @@ directly from the player's own Steam install (App ID `1973530`), read-only, on t
 (registry + `libraryfolders.vdf` on any drive + `appmanifest_1973530.acf`), 60 FPS debug window with
 two test fighters, F1 hitbox / FPS overlay and the red update screen.
 
-**Step 3 (testing):** sprites in the arena.
+**Step 4 (testing):** fighters as data.
+
+- **One file per fighter** in `%LOCALAPPDATA%\LimbusFight\fighters\<name>.json`: name, body boxes
+  (hurtbox, pushbox), movement (walk speeds, jump, gravity, crouch / landing frames), moves with
+  frame data (startup, active, recovery, hitstun, hitstop, pushback) and hitbox, and the look
+  (clips of Limbus sprite names). Numbers and names only, never pictures: fighter files can be
+  shared. `roster.json` remembers which fighter is P1 and which is the Dummy.
+- **F2 fighter editor:** switch the fighter in each slot (`[` `]`), make a new one as a copy
+  (Ctrl+N), rename it (Enter on its name), and change every number with the arrow keys. A preview
+  at game size steps through the punch frame by frame with its pose, swing effect, hurtboxes,
+  hitbox and pushbox, a startup / active / recovery timeline and the punch's frame advantage on hit.
+  Changes are saved and live in the arena immediately.
+- A fighter file with default numbers plays exactly like the old training box (checked frame for
+  frame). Looks made in Step 3 move into the first two fighter files automatically.
+- Ctrl+A in F3 names a still-unnamed fighter after the Sinner it detects (e.g. "Yi Sang").
+
+**Step 3 (done):** sprites in the arena.
 
 - **Looks:** each fighter (P1 and the Dummy) has a look made of five clips: idle, walk, jump,
   punch and hit. In the F3 browser, pick a sprite and press **Ctrl+1..5** to add it to a P1 clip
@@ -89,15 +105,19 @@ LimbusFight/
     │   ├── TextureDecoding.cs       Unity texture formats -> RGBA
     │   ├── AssetReport.cs           LimbusFight_asset_report.txt
     │   └── AssetScanCli.cs          --scan-assets
+    ├── Roster/                      fighters as data (no Raylib types)
+    │   ├── FighterData.cs           fighter file format: body, movement, moves, look
+    │   ├── FighterStore.cs          load / save fighter files + roster.json, first-run defaults
+    │   └── RosterManager.cs         which fighter is in each slot; switch, copy, rename, edit
     ├── Animation/                   looks: data files and clip choice (no Raylib types)
     │   ├── LookData.cs              look file format (clips of sprite references) + load/save
     │   ├── AutoLook.cs              sorts a file's sprites into clips by name (or shape)
     │   └── ClipPicker.cs            fighter state -> clip + frame (punch synced to its frames)
     ├── Gameplay/                    pure simulation (no Raylib types)
-    │   ├── Box.cs  FrameInput.cs  AttackData.cs  Fighter.cs  TestArena.cs
+    │   ├── Box.cs  FrameInput.cs  AttackData.cs  FighterStats.cs  Fighter.cs  TestArena.cs
     ├── Input/KeyboardSampler.cs     keyboard -> per-tick input
     ├── Rendering/                   stage, fighters, debug boxes, window scaling, look textures
-    ├── UI/                          status panel, update screen, debug HUD, asset browser, look editor, theme
+    ├── UI/                          status panel, update screen, debug HUD, asset browser, look + fighter editors, theme
     └── ThirdParty/CrnUnity/         Crunch texture decoder (MIT / zlib)
 ```
 
@@ -119,6 +139,7 @@ artifacts so they never use the account's 500 MB artifact storage quota.
 | J | punch |
 | R | reset positions |
 | F1 | hurtboxes (blue), hitboxes (red), pushboxes (yellow), FPS + frame counter |
+| F2 | fighter editor (Tab P1 / Dummy, `[` `]` switch fighter, Ctrl+N new fighter, Enter on the name rename, Up/Down pick, Left/Right change, Shift bigger steps, Del reset value, Space play / pause, `,` `.` step frames) |
 | F3 | asset browser (type to filter, Enter open, Tab switch list, Ctrl+S save the picked sprite or sheet as PNG, Ctrl+1..5 add it to P1's idle / walk / jump / punch / hit, Ctrl+6 / 7 to the swing / hit effect, Ctrl+A auto look from the open file, Ctrl+Z undo it, add Shift for the Dummy, Ctrl+O open exports, Ctrl+R report) |
 | F4 | look editor (Tab P1 / Dummy, Up/Down clip, Left/Right frame, + / - hold, `,` `.` move frame, Del remove, PgUp/PgDn size, Home auto size, F flip, A anchor, Ctrl+arrows nudge) |
 | F5 | re-scan Steam, retry loading look pictures (and re-scan the asset folders when the browser is open) |

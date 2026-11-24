@@ -83,7 +83,7 @@ public static class ArenaRenderer
         // Step 3: the fighter's look (pictures from the player's own Limbus files), if one is set up.
         if (looks is not null && looks.DrawFighter(slot, f, shake, flash))
         {
-            Ui.TextCentered(f.IsDummy ? "DUMMY" : "P1", (int)(f.X + shake), (int)(f.Y - Fighter.HurtboxHeight - 64), 20, trim);
+            Ui.TextCentered(Label(f), (int)(f.X + shake), (int)(f.Y - f.Stats.HurtboxHeight - 64), 20, trim);
             return;
         }
 
@@ -127,7 +127,7 @@ public static class ArenaRenderer
         }
 
         // Name tag.
-        Ui.TextCentered(f.IsDummy ? "DUMMY" : "P1", (int)(f.X + shake), (int)top - 28, 20, trim);
+        Ui.TextCentered(Label(f), (int)(f.X + shake), (int)top - 28, 20, trim);
     }
 
     /// <summary>The look's swing effect on the hitbox while the attack is out.</summary>
@@ -165,6 +165,13 @@ public static class ArenaRenderer
         }
 
         return true; // finished playing: no spark either
+    }
+
+    /// <summary>"P1" / "DUMMY", plus the fighter's name once it has a real one.</summary>
+    private static string Label(Fighter f)
+    {
+        string tag = f.IsDummy ? "DUMMY" : "P1";
+        return f.Stats.Name is "Player 1" or "Training Box" or "Training Dummy" ? tag : $"{tag}  {f.Stats.Name}";
     }
 
     private static void DrawHitSpark(TestArena arena)

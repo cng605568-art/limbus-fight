@@ -44,9 +44,12 @@ public sealed class LookEditorScreen
     private Color _statusColor = Theme.Text;
     private double _statusUntil;
 
-    public LookEditorScreen(LookManager looks)
+    private readonly Func<LookSlot, FighterStats> _stats;
+
+    public LookEditorScreen(LookManager looks, Func<LookSlot, FighterStats> stats)
     {
         _looks = looks;
+        _stats = stats;
     }
 
     private ClipId Clip => AllClips[_clipIndex];
@@ -259,7 +262,7 @@ public sealed class LookEditorScreen
         }
         else
         {
-            text = "Changes are saved as you make them, to %LOCALAPPDATA%\\LimbusFight\\looks.";
+            text = "Changes are saved as you make them, into the fighter's file (F2 shows which).";
             color = Theme.TextDim;
         }
 
@@ -432,7 +435,8 @@ public sealed class LookEditorScreen
             drew = shown >= 0 && _looks.DrawPicture(_slot, frames[shown], feetX, feetY, 1, Color.White);
         }
 
-        var hurt = new Rectangle(feetX - (Fighter.HurtboxWidth / 2f), feetY - Fighter.HurtboxHeight, Fighter.HurtboxWidth, Fighter.HurtboxHeight);
+        FighterStats stats = _stats(_slot);
+        var hurt = new Rectangle(feetX - (stats.HurtboxWidth / 2f), feetY - stats.HurtboxHeight, stats.HurtboxWidth, stats.HurtboxHeight);
         Raylib.DrawRectangleLinesEx(hurt, 2f, new Color(Theme.Hurtbox.R, Theme.Hurtbox.G, Theme.Hurtbox.B, (byte)200));
         Raylib.DrawLine((int)feetX - 9, (int)feetY, (int)feetX + 9, (int)feetY, Color.White);
         Raylib.DrawLine((int)feetX, (int)feetY - 9, (int)feetX, (int)feetY + 9, Color.White);
@@ -488,7 +492,7 @@ public sealed class LookEditorScreen
             return false;
         }
 
-        AttackData punch = AttackData.TestPunch;
+        AttackData punch = _stats(_slot).Punch;
         float x = feetX + punch.HitboxOffsetX + (punch.HitboxWidth / 2f);
         float y = feetY + punch.HitboxOffsetY + (punch.HitboxHeight / 2f);
         if (Clip == ClipId.HitFx)
@@ -525,7 +529,7 @@ public sealed class LookEditorScreen
         {
             case ClipId.Punch:
             {
-                AttackData punch = AttackData.TestPunch;
+                AttackData punch = _stats(_slot).Punch;
                 int stateFrame = (t % (punch.TotalFrames + 24)) + 1;
                 return stateFrame > punch.TotalFrames ? 0 : ClipPicker.PunchFrame(frames.Count, punch, stateFrame);
             }

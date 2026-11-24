@@ -26,6 +26,7 @@ public sealed class LookManager : IDisposable
         public volatile int LoadTotal;
         public string? Problem;
         public LookData? Undo;
+        public Action<LookData>? Save;
     }
 
     private readonly Dictionary<LookSlot, Slot> _slots = new()
@@ -41,12 +42,21 @@ public sealed class LookManager : IDisposable
     public LookManager(SteamCheckResult steam)
     {
         _steam = steam;
-        foreach ((LookSlot slot, Slot state) in _slots)
-        {
-            state.Data = LookStore.Load(slot, out string? problem);
-            state.Problem = problem;
-            state.ReloadWanted = !state.Data.IsEmpty;
-        }
+    }
+
+    /// <summary>
+    /// Shows <paramref name="look"/> for a slot (the look of the fighter in that slot). Edits made
+    /// through this manager are handed to <paramref name="save"/>, which stores them in the fighter file.
+    /// Pictures already loaded for other looks are reused.
+    /// </summary>
+    public void Assign(LookSlot slot, LookData look, Action<LookData> save)
+    {
+        Slot s = _slots[slot];
+        s.Data = look;
+        s.Save = save;
+        s.Undo = null;
+        s.Problem = null;
+        s.ReloadWanted = true;
     }
 
     public LookData Get(LookSlot slot) => _slots[slot].Data;
@@ -78,7 +88,7 @@ public sealed class LookManager : IDisposable
         Slot s = _slots[slot];
         edit(s.Data);
         s.Data.Sanitise();
-        s.Problem = LookStore.Save(slot, s.Data);
+        s.Save?.Invoke(s.Data);
         s.ReloadWanted = true;
     }
 
@@ -89,7 +99,7 @@ public sealed class LookManager : IDisposable
         s.Undo = LookStore.Deserialize(LookStore.Serialize(s.Data));
         look.Sanitise();
         s.Data = look;
-        s.Problem = LookStore.Save(slot, look);
+        s.Save?.Invoke(look);
         s.ReloadWanted = true;
     }
 
@@ -104,7 +114,7 @@ public sealed class LookManager : IDisposable
 
         s.Data = s.Undo;
         s.Undo = null;
-        s.Problem = LookStore.Save(slot, s.Data);
+        s.Save?.Invoke(s.Data);
         s.ReloadWanted = true;
         return true;
     }

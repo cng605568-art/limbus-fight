@@ -5,6 +5,7 @@ using LimbusFight.Core;
 using LimbusFight.Gameplay;
 using LimbusFight.Input;
 using LimbusFight.Rendering;
+using LimbusFight.Roster;
 using LimbusFight.UI;
 using Raylib_cs;
 
@@ -13,7 +14,7 @@ namespace LimbusFight;
 /// <summary>
 /// Entry point: a 60 FPS Raylib window with the Limbus Company Steam status, the fighting sandbox
 /// (Step 1), the F3 asset browser (Step 2) and fighter looks made of the player's own Limbus
-/// sprites with the F4 look editor (Step 3). Everything is drawn to a fixed 1280x720
+/// sprites with the F4 look editor (Step 3), and fighters as data files with the F2 editor (Step 4). Everything is drawn to a fixed 1280x720
 /// canvas that is scaled (letterboxed) to the window, so coordinates never depend on window size.
 /// </summary>
 internal static class Program
@@ -74,12 +75,36 @@ internal static class Program
         var arena = new TestArena();
         var clock = new FixedStepClock(TargetFps);
         var keyboard = new KeyboardSampler();
+        var roster = new RosterManager();
         var looks = new LookManager(steam);
-        var browser = new AssetBrowserScreen { Looks = looks };
-        var editor = new LookEditorScreen(looks);
+        var browser = new AssetBrowserScreen { Looks = looks, Roster = roster };
+        var editor = new LookEditorScreen(looks, roster.Stats);
+        var boxEditor = new BoxEditorScreen(roster, looks);
+
+        // A slot's fighter (or its numbers) changed: give the arena its stats and the look manager its look.
+        void Sync(LookSlot slot)
+        {
+            FighterData fighter = roster.Get(slot);
+            looks.Assign(slot, fighter.Look, look =>
+            {
+                roster.SetLook(slot, look);
+                LookSlot other = slot == LookSlot.Player1 ? LookSlot.Dummy : LookSlot.Player1;
+                if (roster.IdOf(other) == roster.IdOf(slot) && !ReferenceEquals(looks.Get(other), look))
+                {
+                    looks.Assign(other, look, l => roster.SetLook(other, l));
+                }
+            });
+            arena.SetFighter(slot == LookSlot.Dummy, roster.Stats(slot));
+        }
+
+        roster.Changed += Sync;
+        Sync(LookSlot.Player1);
+        Sync(LookSlot.Dummy);
+
         bool showDebug = false;
         bool showBrowser = false;
         bool showEditor = false;
+        bool showBoxEditor = false;
         double nextAutoRescan = Raylib.GetTime() + AutoRescanSeconds;
 
         while (!Raylib.WindowShouldClose())
@@ -87,10 +112,18 @@ internal static class Program
             keyboard.Poll();
 
             // ---- Global hotkeys (per render frame) --------------------------------------------
+            if (keyboard.WasPressed(KeyboardKey.F2))
+            {
+                showBoxEditor = !showBoxEditor;
+                showBrowser = false;
+                showEditor = false;
+            }
+
             if (keyboard.WasPressed(KeyboardKey.F3))
             {
                 showBrowser = !showBrowser;
                 showEditor = false;
+                showBoxEditor = false;
                 if (showBrowser)
                 {
                     browser.Open(steam);
@@ -101,6 +134,7 @@ internal static class Program
             {
                 showEditor = !showEditor;
                 showBrowser = false;
+                showBoxEditor = false;
             }
 
             if (keyboard.WasPressed(KeyboardKey.F5))
@@ -114,7 +148,7 @@ internal static class Program
                 }
             }
 
-            bool inArena = !showBrowser && !showEditor;
+            bool inArena = !showBrowser && !showEditor && !showBoxEditor;
             if (inArena && keyboard.WasPressed(KeyboardKey.F1))
             {
                 showDebug = !showDebug;
@@ -146,6 +180,11 @@ internal static class Program
                 keyboard.Clear();
                 editor.Update(keyboard);
             }
+            else if (showBoxEditor)
+            {
+                keyboard.Clear();
+                boxEditor.Update(keyboard);
+            }
             else if (steam.ShouldBlockGameplay)
             {
                 keyboard.Clear();
@@ -169,6 +208,10 @@ internal static class Program
             {
                 editor.Draw(VirtualWidth, VirtualHeight);
             }
+            else if (showBoxEditor)
+            {
+                boxEditor.Draw(VirtualWidth, VirtualHeight);
+            }
             else if (steam.ShouldBlockGameplay)
             {
                 UpdateRequiredScreen.Draw(steam, VirtualWidth, VirtualHeight, nextAutoRescan - Raylib.GetTime());
@@ -185,7 +228,7 @@ internal static class Program
 
                 DrawLookStatus(looks);
                 Ui.TextCentered(
-                    "A / D  move   W  jump   J  punch   R  reset   F1  hitboxes   F3  assets   F4  looks   F5  re-scan   ESC  quit",
+                    "A/D  move   W  jump   J  punch   R  reset   F1  boxes   F2  fighter   F3  assets   F4  looks   F5  rescan   ESC  quit",
                     VirtualWidth / 2, VirtualHeight - 34, 20, Theme.TextDim);
             }
 

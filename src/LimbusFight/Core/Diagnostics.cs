@@ -69,7 +69,7 @@ public static class SelfTest
         bool assetsOk = ProbeAssetLibraries();
         Console.WriteLine();
 
-        Console.WriteLine("[Looks] look file + sprite cutter probe");
+        Console.WriteLine("[Looks] look file, sprite cutter and fighter file probe");
         bool looksOk = ProbeLooks();
         Console.WriteLine();
 
@@ -118,7 +118,14 @@ public static class SelfTest
             var cut = LimbusFight.Assets.SpriteCutter.Cut(g, sheet, 2, 2);
             bool cutOk = cut.Width == 1 && cut.Height == 1 && cut.Rgba[0] == 2;
             Console.WriteLine($"  sprite cutter       : {(cutOk ? "ok" : "FAILED")}");
-            return jsonOk && cutOk;
+
+            var fighter = new LimbusFight.Roster.FighterData { Name = "Probe" };
+            fighter.Punch.Startup = 6;
+            var fighterBack = LimbusFight.Roster.FighterStore.Deserialize(LimbusFight.Roster.FighterStore.Serialize(fighter));
+            bool fighterOk = fighterBack.Name == "Probe" && fighterBack.ToStats().Punch.Startup == 6
+                && new LimbusFight.Roster.FighterData().ToStats() == LimbusFight.Gameplay.FighterStats.Default with { Name = "Training Box" };
+            Console.WriteLine($"  fighter file        : {(fighterOk ? "ok" : "FAILED")}");
+            return jsonOk && cutOk && fighterOk;
         }
         catch (Exception ex)
         {

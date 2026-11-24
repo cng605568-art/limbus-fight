@@ -5,6 +5,7 @@ using LimbusFight.Assets;
 using LimbusFight.Core;
 using LimbusFight.Input;
 using LimbusFight.Rendering;
+using LimbusFight.Roster;
 using Raylib_cs;
 
 namespace LimbusFight.UI;
@@ -104,6 +105,9 @@ public sealed class AssetBrowserScreen : IDisposable
 
     /// <summary>Fighter looks; Ctrl+1..5 adds the selected picture to one (set by Program).</summary>
     public LookManager? Looks { get; set; }
+
+    /// <summary>Fighter files; an auto look names a still-unnamed fighter after the detected Sinner.</summary>
+    public RosterManager? Roster { get; set; }
 
     /// <summary>Folder where Ctrl+S saves PNGs: %LOCALAPPDATA%\LimbusFight\exports.</summary>
     public static string ExportFolder =>
@@ -731,6 +735,10 @@ public sealed class AssetBrowserScreen : IDisposable
         Looks.Replace(slot, result.Look);
 
         string who = slot == LookSlot.Player1 ? "P1" : "Dummy";
+        if (result.Character is string character && Roster is not null && Roster.HasDefaultName(slot))
+        {
+            Roster.Rename(slot, character);
+        }
         SetStatus($"Auto look {who}: {result.Summary}.  F4 check, Ctrl+Z undo", result.UsedShapes ? Theme.Warn : Theme.Good);
     }
 

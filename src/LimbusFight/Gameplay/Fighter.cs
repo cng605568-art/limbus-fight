@@ -19,20 +19,9 @@ public enum FighterState
 /// </summary>
 public sealed class Fighter
 {
-    // ---- Body geometry --------------------------------------------------------------------
-    public const float HurtboxWidth = 84f;
-    public const float HurtboxHeight = 182f;
-    public const float PushboxWidth = 70f;
-    public const float PushboxHeight = 170f;
+    // Body, movement and moves come from <see cref="Stats"/> (a fighter data file); see FighterStats.
 
-    // ---- Movement tuning ------------------------------------------------------------------
-    public const float WalkForwardSpeed = 4.0f;
-    public const float WalkBackwardSpeed = 3.2f;
-    public const float JumpLaunchSpeed = 20f;
-    public const float Gravity = 1.0f;
-    public const float JumpHorizontalSpeed = 4.5f;
-    public const int JumpSquatFrames = 4;
-    public const int LandingFrames = 3;
+    /// <summary>How fast pushback after a hit slows down (same for every fighter).</summary>
     public const float PushbackDecay = 0.7f;
 
     /// <summary>A press is remembered this many frames, so it still comes out if pressed slightly early.</summary>
@@ -42,9 +31,10 @@ public sealed class Fighter
     private InputButtons _previousHeld;
     private int _punchBuffer;
 
-    public Fighter(string name, float x, float floorY, int facing, bool isDummy)
+    public Fighter(string name, float x, float floorY, int facing, bool isDummy, FighterStats? stats = null)
     {
         Name = name;
+        Stats = stats ?? FighterStats.Default;
         X = x;
         Y = floorY;
         FloorY = floorY;
@@ -55,6 +45,9 @@ public sealed class Fighter
     }
 
     public string Name { get; }
+
+    /// <summary>Body boxes, movement and moves of the fighter in this slot.</summary>
+    public FighterStats Stats { get; private set; }
 
     public bool IsDummy { get; }
 
@@ -128,11 +121,11 @@ public sealed class Fighter
         // 1. Timed states expire at the start of the frame after their last frame.
         switch (State)
         {
-            case FighterState.JumpSquat when StateFrame > JumpSquatFrames:
+            case FighterState.JumpSquat when StateFrame > Stats.JumpSquatFrames:
                 TakeOff();
                 break;
 
-            case FighterState.Landing when StateFrame > LandingFrames:
+            case FighterState.Landing when StateFrame > Stats.LandingFrames:
                 Enter(FighterState.Idle);
                 break;
 
@@ -165,7 +158,7 @@ public sealed class Fighter
         // 3. Physics.
         if (State == FighterState.Airborne)
         {
-            VelocityY += Gravity;
+            VelocityY += Stats.Gravity;
         }
 
         X += VelocityX + PushbackVelocity;
@@ -221,6 +214,13 @@ public sealed class Fighter
         StateFrame = 0;
     }
 
+    /// <summary>Swaps in another fighter's stats (a different data file, or an edit) and returns to idle in place.</summary>
+    public void SetStats(FighterStats stats)
+    {
+        Stats = stats;
+        ResetTo(X, Facing);
+    }
+
     /// <summary>Called by the arena when this fighter's attack hits.</summary>
     public void OnAttackConnected()
     {
@@ -250,10 +250,10 @@ public sealed class Fighter
     // =========================================================================================
 
     /// <summary>Solid body used for fighter-vs-fighter collision (yellow in debug view).</summary>
-    public Box Pushbox => new(X - (PushboxWidth * 0.5f), Y - PushboxHeight, PushboxWidth, PushboxHeight);
+    public Box Pushbox => new(X - (Stats.PushboxWidth * 0.5f), Y - Stats.PushboxHeight, Stats.PushboxWidth, Stats.PushboxHeight);
 
     /// <summary>Main body hurtbox (blue in debug view).</summary>
-    public Box BodyHurtbox => new(X - (HurtboxWidth * 0.5f), Y - HurtboxHeight, HurtboxWidth, HurtboxHeight);
+    public Box BodyHurtbox => new(X - (Stats.HurtboxWidth * 0.5f), Y - Stats.HurtboxHeight, Stats.HurtboxWidth, Stats.HurtboxHeight);
 
     /// <summary>Extended-arm hurtbox while punching: from the last startup frame through recovery.</summary>
     public Box? LimbHurtbox
@@ -331,8 +331,8 @@ public sealed class Fighter
         FighterState.Attack when CurrentAttack is not null =>
             $"{CurrentAttack.Name} {StateFrame}/{CurrentAttack.TotalFrames} {CurrentAttack.PhaseAt(StateFrame)}",
         FighterState.Hitstun => $"Hitstun ({HitstunRemaining} left)",
-        FighterState.JumpSquat => $"JumpSquat {StateFrame}/{JumpSquatFrames}",
-        FighterState.Landing => $"Landing {StateFrame}/{LandingFrames}",
+        FighterState.JumpSquat => $"JumpSquat {StateFrame}/{Stats.JumpSquatFrames}",
+        FighterState.Landing => $"Landing {StateFrame}/{Stats.LandingFrames}",
         _ => $"{State} f{StateFrame}",
     };
 
@@ -345,7 +345,7 @@ public sealed class Fighter
         if (_punchBuffer > 0)
         {
             _punchBuffer = 0;
-            CurrentAttack = AttackData.TestPunch;
+            CurrentAttack = Stats.Punch;
             AttackConnected = false;
             VelocityX = 0f;
             Enter(FighterState.Attack);
@@ -371,16 +371,16 @@ public sealed class Fighter
             Enter(walkState);
         }
 
-        VelocityX = relative > 0 ? horizontal * WalkForwardSpeed
-            : relative < 0 ? horizontal * WalkBackwardSpeed
+        VelocityX = relative > 0 ? horizontal * Stats.WalkForwardSpeed
+            : relative < 0 ? horizontal * Stats.WalkBackwardSpeed
             : 0f;
     }
 
     private void TakeOff()
     {
         int horizontal = new FrameInput(_held).Horizontal;
-        VelocityX = horizontal * JumpHorizontalSpeed;
-        VelocityY = -JumpLaunchSpeed;
+        VelocityX = horizontal * Stats.JumpHorizontalSpeed;
+        VelocityY = -Stats.JumpLaunchSpeed;
         Enter(FighterState.Airborne);
     }
 

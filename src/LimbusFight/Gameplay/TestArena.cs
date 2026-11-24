@@ -70,6 +70,15 @@ public sealed class TestArena
         ResolveHit(attacker: Player1, defender: Dummy);
     }
 
+    /// <summary>Gives Player 1 or the dummy another fighter's stats (from its data file). Positions are kept.</summary>
+    public void SetFighter(bool dummy, FighterStats stats)
+    {
+        (dummy ? Dummy : Player1).SetStats(stats);
+        HitstopRemaining = 0;
+        LastHitFrame = -1;
+        LastHitAttacker = null;
+    }
+
     /// <summary>Puts both fighters back at their start positions (the frame counter keeps running).</summary>
     public void ResetPositions()
     {
@@ -110,7 +119,7 @@ public sealed class TestArena
 
     private static void ClampToStage(Fighter fighter)
     {
-        float half = Fighter.PushboxWidth * 0.5f;
+        float half = fighter.Stats.PushboxWidth * 0.5f;
         fighter.X = Math.Clamp(fighter.X, WallLeft + half, WallRight - half);
     }
 
