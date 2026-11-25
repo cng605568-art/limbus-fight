@@ -46,11 +46,19 @@ public static class LookLoader
                     progress?.Report((done, distinct.Count));
                     ScannedFile? source = file;
 
-                    // The bundle may have been renamed by a game update: look the picture up by name.
+                    // The bundle may have been renamed by a game update: look the picture up by name, but only
+                    // when the name can't belong to another character ("Move", "skill1_1" are in every character's bundle).
                     if (source is null || !Holds(Read(reader, source, contents), frame))
                     {
                         cache ??= AssetCache.Load();
                         source = FindByName(frame, steam, cache, reader, contents) ?? source;
+                    }
+
+                    if (source is not null && !Holds(Read(reader, source, contents), frame))
+                    {
+                        result[frame.Key] = new LoadedPicture(frame.Key, null, $"{frame.Name}: not found in its file any more (a game update?). Rebuild the look in F3.");
+                        done++;
+                        continue;
                     }
 
                     result[frame.Key] = source is null
@@ -70,15 +78,20 @@ public static class LookLoader
     }
 
     /// <summary>Builds the reference for a sprite or texture picked in the asset browser.</summary>
-    public static LookFrame MakeFrame(ScannedFile file, string kind, string name, string? sheet, int hold) => new()
+    public static LookFrame MakeFrame(ScannedFile file, string kind, string name, string? sheet, int hold, string? atlas = null) => new()
     {
         Root = file.RootKind == LimbusAssetRoots.CacheRootKind ? LookFrame.RootCache : LookFrame.RootGame,
         File = file.RootKind == LimbusAssetRoots.CacheRootKind ? file.DisplayName : file.RelativePath,
         Kind = kind,
         Name = name,
         Sheet = sheet,
+        Atlas = atlas,
         Hold = hold,
     };
+
+    /// <summary>A sprite of this frame's name, and of its atlas (character) when the frame knows it.</summary>
+    private static bool SameSprite(SpriteInfo s, LookFrame frame) =>
+        s.Name == frame.Name && (frame.Atlas is null || s.Atlas == frame.Atlas);
 
     private static DecodedImage? Cut(UnityAssetReader reader, ScannedFile file, AssetFileContents? contents, LookFrame frame, out string? error)
     {
@@ -102,7 +115,7 @@ public static class LookLoader
             return image with { Pivot = (image.Width / 2f, image.Height) }; // whole textures stand on their bottom edge
         }
 
-        List<SpriteInfo> candidates = contents.Sprites.Where(s => s.Name == frame.Name).ToList();
+        List<SpriteInfo> candidates = contents.Sprites.Where(s => SameSprite(s, frame)).ToList();
         if (candidates.Count == 0)
         {
             error = $"{frame.Name}: not found in its file.";
@@ -171,7 +184,7 @@ public static class LookLoader
     private static bool Holds(AssetFileContents? contents, LookFrame frame) =>
         contents is not null && (frame.Kind == LookFrame.KindTexture
             ? contents.Textures.Any(t => t.Name == frame.Name)
-            : contents.Sprites.Any(s => s.Name == frame.Name));
+            : contents.Sprites.Any(s => SameSprite(s, frame)));
 
     /// <summary>Where the reference's file is now: cache bundles keep their folder name, game files their path.</summary>
     private static ScannedFile? Locate(LookFrame frame, SteamCheckResult steam)
@@ -216,9 +229,16 @@ public static class LookLoader
         NameKind kind = frame.Kind == LookFrame.KindTexture ? NameKind.Texture : NameKind.Sprite;
         IReadOnlyList<AssetRoot> roots = LimbusAssetRoots.Find(steam);
 
-        IEnumerable<CachedFile> matches = cache.Entries
+        List<CachedFile> matches = cache.Entries
             .Where(e => e.Names is not null && e.Names.Any(n => n.Kind == kind && n.Name == frame.Name))
-            .OrderByDescending(e => frame.Sheet is not null && e.Names!.Any(n => n.Kind == NameKind.Texture && n.Name == frame.Sheet));
+            .OrderByDescending(e => frame.Sheet is not null && e.Names!.Any(n => n.Kind == NameKind.Texture && n.Name == frame.Sheet))
+            .ToList();
+
+        // Without an atlas to check against, a name that is in several files could be any character's.
+        if (frame.Atlas is null && matches.Count > 1)
+        {
+            return null;
+        }
 
         foreach (CachedFile entry in matches)
         {

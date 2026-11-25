@@ -4,7 +4,8 @@ namespace LimbusFight.Animation;
 
 /// <summary>A sprite that could become a pose: its name and shape (no pixels needed).</summary>
 /// <param name="PivotY">Unity pivot, 0 = bottom edge, 1 = top edge.</param>
-public sealed record PoseCandidate(string Name, int Width, int Height, float PivotX, float PivotY);
+/// <param name="Group">The SpriteAtlas the sprite belongs to (null = its own texture).</param>
+public sealed record PoseCandidate(string Name, int Width, int Height, float PivotX, float PivotY, string? Group = null);
 
 /// <summary>One auto pick: which candidate went into which clip, and why.</summary>
 public sealed record AutoPick(ClipId Clip, string Name, string Reason);

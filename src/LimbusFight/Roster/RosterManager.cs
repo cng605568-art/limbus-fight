@@ -29,6 +29,9 @@ public sealed class RosterManager
     /// <summary>Raised when a slot's fighter or its numbers change (not for look edits).</summary>
     public event Action<LookSlot>? Changed;
 
+    /// <summary>Raised when a slot's fighter got a new look from outside the look editor (the auto roster). Numbers are unchanged.</summary>
+    public event Action<LookSlot>? LookChanged;
+
     /// <summary>Last problem (a damaged or missing file, a failed save), for the status line.</summary>
     public string? Problem { get; private set; }
 
@@ -66,7 +69,13 @@ public sealed class RosterManager
             if (IdOf(slot) == id)
             {
                 SetLook(slot, look);
-                RaiseChanged(slot);
+                LookChanged?.Invoke(slot);
+                LookSlot other = slot == LookSlot.Player1 ? LookSlot.Dummy : LookSlot.Player1;
+                if (IdOf(other) == id)
+                {
+                    LookChanged?.Invoke(other);
+                }
+
                 return;
             }
         }

@@ -63,6 +63,10 @@ public sealed class LookFrame
     /// <summary>Sprites: the atlas sheet it sits on (tells same-named sprites apart).</summary>
     public string? Sheet { get; set; }
 
+    /// <summary>Sprites: the SpriteAtlas (character) it belongs to. Bundles can hold several characters
+    /// with the same sprite names, so this keeps a look from mixing them.</summary>
+    public string? Atlas { get; set; }
+
     /// <summary>How many 60 Hz frames this frame is shown (idle, walk and hit clips).</summary>
     public int Hold { get; set; } = 8;
 
@@ -71,9 +75,9 @@ public sealed class LookFrame
 
     /// <summary>Identifies the picture regardless of timing; frames with the same key share one texture.</summary>
     [JsonIgnore]
-    public string Key => $"{Root}|{File}|{Kind}|{Name}|{Sheet}";
+    public string Key => $"{Root}|{File}|{Kind}|{Name}|{Sheet}|{Atlas}";
 
-    public LookFrame Clone() => new() { Root = Root, File = File, Kind = Kind, Name = Name, Sheet = Sheet, Hold = Hold, Note = Note };
+    public LookFrame Clone() => new() { Root = Root, File = File, Kind = Kind, Name = Name, Sheet = Sheet, Atlas = Atlas, Hold = Hold, Note = Note };
 }
 
 /// <summary>

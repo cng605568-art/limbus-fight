@@ -120,6 +120,7 @@ public sealed class GameApp
         _select = new SelectScreen(_roster, _looks) { Status = () => _autoRoster.Status };
 
         _roster.Changed += Sync;
+        _roster.LookChanged += SyncLook;
         Sync(LookSlot.Player1);
         Sync(LookSlot.Dummy);
         BuildMenu();
@@ -131,6 +132,13 @@ public sealed class GameApp
     /// <summary>A slot's fighter (or its numbers) changed: give the arena its stats and the look manager its look.</summary>
     private void Sync(LookSlot slot)
     {
+        SyncLook(slot);
+        _arena.SetFighter(slot == LookSlot.Dummy, _roster.Stats(slot));
+    }
+
+    /// <summary>Only the look changed: show it, without touching the fighter's health or position.</summary>
+    private void SyncLook(LookSlot slot)
+    {
         FighterData fighter = _roster.Get(slot);
         _looks.Assign(slot, fighter.Look, look =>
         {
@@ -141,7 +149,6 @@ public sealed class GameApp
                 _looks.Assign(other, look, l => _roster.SetLook(other, l));
             }
         });
-        _arena.SetFighter(slot == LookSlot.Dummy, _roster.Stats(slot));
     }
 
     private void BuildMenu()
@@ -172,7 +179,11 @@ public sealed class GameApp
             _appFrames++;
             _keyboard.Poll();
             _looks.Update();
-            _autoRoster.Update();
+            if (_screen != AppScreen.Fight && _screen != AppScreen.Intro)
+            {
+                _autoRoster.Update(); // found looks wait until the fight is over, so nobody changes mid-match
+            }
+
             if (_autoRoster.FoundCount != _lookCount)
             {
                 _lookCount = _autoRoster.FoundCount;

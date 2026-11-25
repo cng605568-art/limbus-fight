@@ -14,7 +14,9 @@ public sealed record TextureInfo(int FileIndex, long PathId, string Name, int Wi
 /// One Sprite found inside a bundle or serialized file. Width / Height are its full size (m_Rect);
 /// PivotX / PivotY are Unity's pivot (0..1 from the bottom-left).
 /// </summary>
-public sealed record SpriteInfo(int FileIndex, long PathId, string Name, int Width, int Height, float PivotX = 0.5f, float PivotY = 0.5f);
+/// <param name="Atlas">Name of the SpriteAtlas the sprite is packed into (e.g. "10216_Faust_Yuna_SDAtlas"); null if it has its own texture.
+/// One bundle can hold several characters' atlases with the same sprite names ("Move", "skill1_1"), so this is what tells them apart.</param>
+public sealed record SpriteInfo(int FileIndex, long PathId, string Name, int Width, int Height, float PivotX = 0.5f, float PivotY = 0.5f, string? Atlas = null);
 
 /// <summary>What one bundle / serialized file contains.</summary>
 public sealed record AssetFileContents(
@@ -86,6 +88,7 @@ public sealed class UnityAssetReader : IDisposable
                 return new AssetFileContents(source.FullPath, null, false, counts, textures, sprites, errors);
             }
 
+            var atlasNames = new Dictionary<(AssetsFileInstance, long), string?>();
             for (int fileIndex = 0; fileIndex < _files.Count; fileIndex++)
             {
                 AssetsFileInstance inst = _files[fileIndex];
@@ -135,7 +138,8 @@ public sealed class UnityAssetReader : IDisposable
                             (int)MathF.Round(rect["width"].AsFloat),
                             (int)MathF.Round(rect["height"].AsFloat),
                             pivot.IsDummy ? 0.5f : pivot["x"].AsFloat,
-                            pivot.IsDummy ? 0.5f : pivot["y"].AsFloat));
+                            pivot.IsDummy ? 0.5f : pivot["y"].AsFloat,
+                            AtlasNameOf(inst, field, atlasNames)));
                     }
                     catch (Exception ex)
                     {
@@ -516,6 +520,39 @@ public sealed class UnityAssetReader : IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>The name of the SpriteAtlas a sprite is packed into (direct link, else its first atlas tag); null if none.</summary>
+    private string? AtlasNameOf(AssetsFileInstance inst, AssetTypeValueField sprite, Dictionary<(AssetsFileInstance, long), string?> memo)
+    {
+        try
+        {
+            AssetTypeValueField link = sprite["m_SpriteAtlas"];
+            if (!link.IsDummy && link["m_PathID"].AsLong != 0)
+            {
+                (AssetsFileInstance File, AssetFileInfo Info)? target = Resolve(inst, link);
+                if (target is null)
+                {
+                    return "external#" + link["m_PathID"].AsLong;
+                }
+
+                var key = (target.Value.File, target.Value.Info.PathId);
+                if (!memo.TryGetValue(key, out string? name))
+                {
+                    name = ReadName(target.Value.File, target.Value.Info);
+                    memo[key] = name;
+                }
+
+                return name;
+            }
+
+            AssetTypeValueField tags = sprite["m_AtlasTags"];
+            return tags.IsDummy || tags["Array"].Children.Count == 0 ? null : tags["Array"].Children[0].AsString;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The atlas entry whose key (GUID + id) equals the sprite's m_RenderDataKey.</summary>

@@ -34,12 +34,32 @@ public sealed class AutoRoster : IDisposable
 
     private static string StatePath => Path.Combine(FighterStore.Folder, "autoroster.json");
 
+    /// <summary>Version of the look search; looks made by older versions are rebuilt once.</summary>
+    public const int SearchVersion = 2;
+
     /// <summary>Starts looking (once). Fighters that already have a look are never touched.</summary>
     public void Start(SteamCheckResult steam, bool force = false)
     {
         if (Busy)
         {
             return;
+        }
+
+        AutoRosterState old = LoadState();
+        if (old.Version < SearchVersion)
+        {
+            // Version 1 could mix two characters from one bundle (same sprite names, different atlases).
+            // Its looks have no atlas on their frames: clear those on built-in fighters so they are rebuilt.
+            foreach ((string id, FighterData data) in _roster.ListForSelect())
+            {
+                if (data.Preset > 0 && !data.Look.IsEmpty && data.Look.AllFrames.All(f => f.Atlas is null))
+                {
+                    _roster.SetLookById(id, new LookData());
+                }
+            }
+
+            SaveState(new AutoRosterState { Version = SearchVersion });
+            force = true;
         }
 
         List<(string Id, string Sinner)> wanted = _roster.ListForSelect()
@@ -116,7 +136,7 @@ public sealed class AutoRoster : IDisposable
             }
             else
             {
-                state = new AutoRosterState { Signature = signature };
+                state = new AutoRosterState { Signature = signature, Version = SearchVersion };
             }
 
             if (wanted.Count == 0)
@@ -210,25 +230,31 @@ public sealed class AutoRoster : IDisposable
             }
 
             var candidates = contents.Sprites
-                .Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY))
+                .Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY, sp.Atlas))
                 .ToList();
             if (candidates.Count == 0)
             {
                 continue;
             }
 
-            AutoLookResult result = AutoLook.Build(candidates,
-                (pose, hold) => LookLoader.MakeFrame(file, LookFrame.KindSprite, pose.Name, null, hold));
-            int rating = RateLook(result, sinner);
+            // One character per look: each atlas in the file is tried on its own (see LookFamilies).
+            LookFamilies.Pick? pick = LookFamilies.BuildBest(candidates, sinner,
+                (pose, hold) => LookLoader.MakeFrame(file, LookFrame.KindSprite, pose.Name, null, hold, pose.Group));
+            if (pick is null)
+            {
+                continue;
+            }
+
+            int rating = RateLook(pick.Result, sinner) + pick.Match;
             if (rating > bestRating)
             {
                 bestRating = rating;
-                best = result.Look;
+                best = pick.Result.Look;
             }
         }
 
         reader.Close();
-        if (best is null || bestRating < 20)
+        if (best is null || bestRating < 40)
         {
             return null;
         }
@@ -291,30 +317,10 @@ public sealed class AutoRoster : IDisposable
     /// <summary>How good an auto look is: more poses found by name is better; another Sinner's file is rejected.</summary>
     public static int RateLook(AutoLookResult result, string sinner)
     {
-        if (result.Look.IsEmpty)
+        int rating = LookFamilies.Rate(result);
+        if (rating == int.MinValue)
         {
-            return int.MinValue;
-        }
-
-        LookData look = result.Look;
-        int rating = 0;
-        foreach (ClipId clip in Enum.GetValues<ClipId>())
-        {
-            if (look.Clips.TryGetValue(LookData.ClipKey(clip), out List<LookFrame>? frames) && frames.Count > 0)
-            {
-                rating += LookData.IsEffect(clip) ? 3 : 10;
-                rating += Math.Min(frames.Count, 6);
-            }
-        }
-
-        if (!HasClip(look, ClipId.Idle) || !HasClip(look, ClipId.Punch))
-        {
-            rating -= 40;
-        }
-
-        if (result.UsedShapes)
-        {
-            rating -= 25;
+            return rating;
         }
 
         bool isSinner = AutoLook.SinnerNames.Any(n => n.Equals(sinner, StringComparison.OrdinalIgnoreCase));
@@ -325,9 +331,6 @@ public sealed class AutoRoster : IDisposable
 
         return rating;
     }
-
-    private static bool HasClip(LookData look, ClipId clip) =>
-        look.Clips.TryGetValue(LookData.ClipKey(clip), out List<LookFrame>? frames) && frames.Count > 0;
 
     private static AutoRosterState LoadState()
     {
@@ -359,6 +362,8 @@ public sealed class AutoRoster : IDisposable
     /// <summary>Which Sinners were already searched for, for this set of Limbus files.</summary>
     private sealed class AutoRosterState
     {
+        public int Version { get; set; } = 1;
+
         public string Signature { get; set; } = string.Empty;
 
         public HashSet<string> Tried { get; set; } = new(StringComparer.OrdinalIgnoreCase);

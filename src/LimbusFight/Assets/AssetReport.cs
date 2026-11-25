@@ -188,7 +188,7 @@ public static class AssetReport
         try
         {
             AssetFileContents contents = reader.ReadContents(file);
-            var candidates = contents.Sprites.Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY)).ToList();
+            var candidates = contents.Sprites.Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY, sp.Atlas)).ToList();
             AutoLookResult result = AutoLook.Build(candidates, (pose, hold) => new LookFrame { File = "x", Name = pose.Name, Hold = hold });
             sb.AppendLine($"      auto look: {result.Summary}");
             foreach (AutoPick pick in result.Picks.Take(24))

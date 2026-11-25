@@ -52,6 +52,23 @@ public sealed class LookManager : IDisposable
     public void Assign(LookSlot slot, LookData look, Action<LookData> save)
     {
         Slot s = _slots[slot];
+        if (!ReferenceEquals(s.Data, look))
+        {
+            // Free the pictures the new look does not use, so browsing many fighters does not fill the GPU.
+            var keep = look.AllFrames.Select(f => f.Key).ToHashSet();
+            foreach (string key in s.Textures.Keys.Where(k => !keep.Contains(k)).ToList())
+            {
+                Raylib.UnloadTexture(s.Textures[key]);
+                s.Textures.Remove(key);
+                s.Pictures.Remove(key);
+            }
+
+            foreach (string key in s.Pictures.Keys.Where(k => !keep.Contains(k)).ToList())
+            {
+                s.Pictures.Remove(key);
+            }
+        }
+
         s.Data = look;
         s.Save = save;
         s.Undo = null;
@@ -145,10 +162,17 @@ public sealed class LookManager : IDisposable
                 }
                 else
                 {
+                    // Pictures for a look that was replaced while loading are dropped.
+                    var wanted = s.Data.AllFrames.Select(f => f.Key).ToHashSet();
                     foreach ((string key, LoadedPicture picture) in task.Result)
                     {
-                        AddPicture(s, key, picture);
+                        if (wanted.Contains(key))
+                        {
+                            AddPicture(s, key, picture);
+                        }
                     }
+
+                    s.ReloadWanted |= s.Data.AllFrames.Any(f => !s.Pictures.ContainsKey(f.Key));
                 }
             }
 

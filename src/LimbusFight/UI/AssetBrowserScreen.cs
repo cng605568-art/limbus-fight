@@ -725,10 +725,15 @@ public sealed class AssetBrowserScreen : IDisposable
 
         ScannedFile source = _contentsSource;
         var candidates = _contents.Sprites
-            .Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY))
+            .Select(sp => new PoseCandidate(sp.Name, sp.Width, sp.Height, sp.PivotX, sp.PivotY, sp.Atlas))
             .ToList();
-        AutoLookResult result = AutoLook.Build(candidates,
-            (pose, hold) => LookLoader.MakeFrame(source, LookFrame.KindSprite, pose.Name, null, hold));
+
+        // A file can hold several characters (one atlas each): use the atlas of the picked sprite, else the best one.
+        SpriteInfo? picked = _texIndex < _textureView.Count ? _textureView[_texIndex].Sprite : null;
+        LookFamilies.Pick? pick = LookFamilies.BuildBest(candidates, null,
+            (pose, hold) => LookLoader.MakeFrame(source, LookFrame.KindSprite, pose.Name, null, hold, pose.Group),
+            picked?.Atlas, usePreferred: picked is not null);
+        AutoLookResult result = pick?.Result ?? AutoLook.Build(Array.Empty<PoseCandidate>(), (pose, hold) => new LookFrame());
 
         if (result.Look.IsEmpty)
         {
